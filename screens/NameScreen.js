@@ -279,7 +279,8 @@ const NameScreen = () => {
                 <Image source={logo2} style={styles.logo} resizeMode="contain" />
               </View>
               <Text style={styles.headerTitle}>Let’s get to know you</Text>
-              <Text style={styles.headerSubtitle}>Your name helps us personalize your experience</Text>
+              <Text style={styles.headerSubtitle}>Meet Africans from Elite Schools around the World</Text>
+              {/* <Text style={styles.headerSubtitle}>Your name helps us personalize your experience</Text> */}
 
               {/* Progress Bar */}
               <View style={styles.progressContainer}>

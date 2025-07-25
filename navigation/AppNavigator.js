@@ -26,6 +26,8 @@ import Toast from 'react-native-toast-message';
 import ProfileScreen from '../screens/ProfileScreen';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import UserProfileScreen from '../screens/UserProfileScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -70,6 +72,8 @@ const AppNavigator = () => {
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="ForgotPasswordScreen" component={ForgotPasswordScreen} />
+            <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
             <Stack.Screen name="NameScreen" component={NameScreen} />
             <Stack.Screen name="EmailScreen" component={EmailScreen} />
             <Stack.Screen name="PasswordScreen" component={PasswordScreen} />

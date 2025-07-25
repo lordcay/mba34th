@@ -372,7 +372,7 @@ const LoginScreen = () => {
           {loading && (
             <View style={styles.loadingOverlay}>
               <LottieView
-                source={require('../assets/loader.json')}
+                source={require('../assets/globe.json')}
                 autoPlay
                 loop
                 style={{ width: 180, height: 180 }}

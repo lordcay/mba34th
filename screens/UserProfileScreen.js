@@ -90,6 +90,8 @@ const UserProfileScreen = () => {
                 <InfoRow label="Gender" value={user.gender} />
                 <InfoRow label="Date of Birth" value={user.DOB?.slice(0, 10) || 'N/A'} />
                 <InfoRow label="Languages Spoken" value={parseLanguages(user.languages)} />
+                <InfoRow label="Origin" value={user.origin} />
+
             </View>
 
             {/* Academic Info */}
@@ -154,6 +156,7 @@ const styles = StyleSheet.create({
     },
     profileHeader: {
         alignItems: 'center',
+        marginTop: '20%',
         paddingVertical: 30,
         backgroundColor: '#f1f3f6',
     },

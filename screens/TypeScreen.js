@@ -57,7 +57,7 @@ const TypeScreen = () => {
             <View style={styles.logoWrapper}>
               <Image source={logo2} style={styles.logo} resizeMode="contain" />
             </View>
-            <Text style={styles.headerTitle}>Join 34TH STREET</Text>
+            {/* <Text style={styles.headerTitle}>Join 34TH STREET</Text> */}
             <Text style={styles.headerSubtitle}>Connect across top universities</Text>
 
             {/* Progress Bar */}

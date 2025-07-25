@@ -56,7 +56,7 @@ const VerifyOTPScreen = () => {
     return (
       <View style={styles.loaderContainer}>
         <LottieView
-          source={require('../assets/loader.json')}
+          source={require('../assets/globe.json')}
           autoPlay
           loop
           style={{ width: 200, height: 200 }}

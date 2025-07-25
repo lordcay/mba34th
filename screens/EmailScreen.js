@@ -25,32 +25,101 @@ import { getRegistrationProgress, saveRegistrationProgress } from '../registrati
 import { Picker } from '@react-native-picker/picker';
 import logo2 from '../assets/logo1.png';
 
-
 const universities = [
   { name: 'Choose a university', extension: '' },
-  { name: 'Duke University', extension: '@duke.edu' },
-  { name: 'Kenan-Flagler University', extension: '@kenan-flagler.unc.edu' },
-  { name: 'Cornell University', extension: '@cornell.edu' },
-  { name: 'Princeton University', extension: '@princeton.edu' },
-  { name: 'Massachusetts Institute of Technology (MIT)', extension: '@mit.edu' },
-  { name: 'Harvard University', extension: '@g.harvard.edu' },
-  { name: 'Stanford University', extension: '@stanford.edu' },
-  { name: 'Yale University', extension: '@yale.edu' },
-  { name: 'California Institute of Technology (Caltech)', extension: '@caltech.edu' },
-  { name: 'University of Pennsylvania', extension: '@upenn.edu' },
-  { name: 'Johns Hopkins University', extension: '@jhu.edu' },
-  { name: 'Northwestern University', extension: '@u.northwestern.edu' },
-  { name: 'Columbia University', extension: '@columbia.edu' },
-  { name: 'University of Chicago', extension: '@uchicago.edu' },
-  { name: 'University of California, Berkeley', extension: '@berkeley.edu' },
-  { name: 'University of California, Los Angeles (UCLA)', extension: '@ucla.edu' },
-  { name: 'University of Michigan', extension: '@umich.edu' },
-  { name: 'New York University (NYU)', extension: '@nyu.edu' },
-  { name: 'University of Southern California (USC)', extension: '@usc.edu' },
-  { name: 'Rice University', extension: '@rice.edu' },
-
-
+  { name: 'American Uni.', extension: '@american.edu' },
+  { name: 'Arizona State', extension: '@asu.edu' },
+  { name: 'Babson', extension: '@babson.edu' },
+  { name: 'Bayes', extension: '@city.ac.uk' },
+  { name: 'Boston University', extension: '@bu.edu' },
+  { name: 'Cambridge', extension: '@cam.ac.uk' },
+  { name: 'Canada West', extension: '@ucanada.ca' },
+  { name: 'Carnegie Mellon', extension: '@cmu.edu' },
+  { name: 'Chicago Booth', extension: '@chicagobooth.edu' },
+  { name: 'Columbia', extension: '@columbia.edu' },
+  { name: 'Cornell', extension: '@cornell.edu' },
+  { name: 'Cranfield', extension: '@cranfield.ac.uk' },
+  { name: 'Darden', extension: '@darden.virginia.edu' },
+  { name: 'Duke', extension: '@duke.edu' },
+  { name: 'Emory', extension: '@emory.edu' },
+  { name: 'Georgetown Uni.', extension: '@georgetown.edu' },
+  { name: 'Georgia Institute of Technology', extension: '@gatech.edu' },
+  { name: 'Haas', extension: '@haas.berkeley.edu' },
+  { name: 'Harvard', extension: '@hbs.edu' },
+  { name: 'HEC', extension: '@hec.edu' },
+  { name: 'IESE', extension: '@iese.edu' },
+  { name: 'IMD', extension: '@imd.org' },
+  { name: 'Imperial', extension: '@imperial.ac.uk' },
+  { name: 'Indiana University', extension: '@iu.edu' },
+  { name: 'INSEAD', extension: '@insead.edu' },
+  { name: 'Johns Hopkins', extension: '@jhu.edu' },
+  { name: 'Kellog', extension: '@kellogg.northwestern.edu' },
+  { name: 'LBS', extension: '@london.edu' },
+  { name: 'Leeds', extension: '@leeds.ac.uk' },
+  { name: 'McGill', extension: '@mcgill.ca' },
+  { name: 'Michigan State', extension: '@msu.edu' },
+  { name: 'MIT', extension: '@mit.edu' },
+  { name: 'NYU', extension: '@stern.nyu.edu' },
+  { name: 'Ohio State', extension: '@osu.edu' },
+  { name: 'Owen', extension: '@owen.vanderbilt.edu' },
+  { name: 'Oxford', extension: '@ox.ac.uk' },
+  { name: 'Purdue Uni', extension: '@purdue.edu' },
+  { name: 'Queen’s Uni.', extension: '@queensu.ca' },
+  { name: 'Rice', extension: '@rice.edu' },
+  { name: 'Rotman', extension: '@utoronto.ca' },
+  { name: 'Southwales', extension: '@students.southwales.ac.uk.' },
+  { name: 'Temple', extension: '@temple.edu' },
+  { name: 'Tuck', extension: '@tuck.dartmouth.edu' },
+  { name: 'UCLA', extension: '@anderson.ucla.edu' },
+  { name: 'UNC', extension: '@unc.edu' },
+  { name: 'Uni. of California', extension: '@ucdavis.edu' },
+  { name: 'Uni. of California', extension: '@uci.edu' },
+  { name: 'Uni. of Louisville', extension: '@louisville.edu' },
+  { name: 'Uni. of Maryland', extension: '@umd.edu' },
+  { name: 'Uni. of Michigan', extension: '@umich.edu' },
+  { name: 'Uni. of Notre Dame', extension: '@nd.edu' },
+  { name: 'Uni. of Pittsburgh', extension: '@pitt.edu' },
+  { name: 'Uni. of Rochester', extension: '@rochester.edu' },
+  { name: 'Uni. of Rochester', extension: '@rochester.edu' },
+  { name: 'Uni.of Cambridge', extension: '@jbs.cam.ac.uk' },
+  { name: 'Uni.of Minnesota', extension: '@umn.edu' },
+  { name: 'USC', extension: '@usc.edu' },
+  { name: 'UT Austin', extension: '@utexas.edu' },
+  { name: 'Vanderbilt', extension: '@vanderbilt.edu' },
+  { name: 'Warwick', extension: '@wbs.ac.uk' },
+  { name: 'WashU', extension: '@wustl.edu' },
+  { name: 'Western Uni.', extension: '@uwo.ca' },
+  { name: 'Wharton', extension: '@wharton.upenn.edu' },
+  { name: 'William & Mary', extension: '@wm.edu' },
+  { name: 'Yale', extension: '@yale.edu' },
+  { name: 'York University', extension: '@schulich.yorku.ca' }
 ];
+
+// const universities = [
+//   { name: 'Choose a university', extension: '' },
+//   { name: 'Duke University', extension: '@duke.edu' },
+//   { name: 'Kenan-Flagler University', extension: '@kenan-flagler.unc.edu' },
+//   { name: 'Cornell University', extension: '@cornell.edu' },
+//   { name: 'Princeton University', extension: '@princeton.edu' },
+//   { name: 'Massachusetts Institute of Technology (MIT)', extension: '@mit.edu' },
+//   { name: 'Harvard University', extension: '@g.harvard.edu' },
+//   { name: 'Stanford University', extension: '@stanford.edu' },
+//   { name: 'Yale University', extension: '@yale.edu' },
+//   { name: 'California Institute of Technology (Caltech)', extension: '@caltech.edu' },
+//   { name: 'University of Pennsylvania', extension: '@upenn.edu' },
+//   { name: 'Johns Hopkins University', extension: '@jhu.edu' },
+//   { name: 'Northwestern University', extension: '@u.northwestern.edu' },
+//   { name: 'Columbia University', extension: '@columbia.edu' },
+//   { name: 'University of Chicago', extension: '@uchicago.edu' },
+//   { name: 'University of California, Berkeley', extension: '@berkeley.edu' },
+//   { name: 'University of California, Los Angeles (UCLA)', extension: '@ucla.edu' },
+//   { name: 'University of Michigan', extension: '@umich.edu' },
+//   { name: 'New York University (NYU)', extension: '@nyu.edu' },
+//   { name: 'University of Southern California (USC)', extension: '@usc.edu' },
+//   { name: 'Rice University', extension: '@rice.edu' },
+
+
+// ];
 
 const EmailScreen = () => {
   const [emailUsername, setEmailUsername] = useState('');
@@ -106,7 +175,7 @@ const EmailScreen = () => {
               <View style={styles.logoWrapper}>
                 <Image source={logo2} style={styles.logo} resizeMode="contain" />
               </View>
-              <Text style={styles.headerTitle}>Join 34TH STREET</Text>
+              {/* <Text style={styles.headerTitle}>Join 34TH STREET</Text> */}
               <Text style={styles.headerSubtitle}>Connect across top universities</Text>
 
               {/* Progress Bar */}
