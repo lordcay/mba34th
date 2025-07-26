@@ -60,7 +60,8 @@ const ForgotPasswordScreen = ({ navigation }) => {
                     placeholderTextColor="#aaa"
                     keyboardType="email-address"
                     autoCapitalize="none"
-                    onChangeText={setEmail}
+                    // onChangeText={setEmail}
+                    onChangeText={(text) => setEmail(text.toLowerCase())}
                     value={email}
                 />
 
