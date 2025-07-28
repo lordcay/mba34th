@@ -35,7 +35,7 @@
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.0.169:4000/messages/${user.id}`, {
+//       const res = await axios.get(`https://three4th-street-backend.onrender.com/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -54,7 +54,7 @@
 //     };
 
 //     try {
-//       const res = await axios.post('http://192.168.0.169:4000/messages', newMessage, {
+//       const res = await axios.post('https://three4th-street-backend.onrender.com/messages', newMessage, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages([res.data, ...messages]);
@@ -271,7 +271,7 @@ const PrivateChatScreen = () => {
 
   const fetchMessages = async () => {
     try {
-      const res = await axios.get(`http://192.168.0.169:4000/messages/${user.id}`, {
+      const res = await axios.get(`https://three4th-street-backend.onrender.com/messages/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(res.data.reverse()); // show most recent at bottom
@@ -290,7 +290,7 @@ const PrivateChatScreen = () => {
     };
 
     try {
-      const res = await axios.post('http://192.168.0.169:4000/messages', newMessage, {
+      const res = await axios.post('https://three4th-street-backend.onrender.com/messages', newMessage, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages([res.data, ...messages]); // add new message
@@ -359,7 +359,7 @@ const PrivateChatScreen = () => {
             uri: user?.photos?.[0]
               ? user.photos[0].startsWith('http')
                 ? user.photos[0]
-                : `http://192.168.0.169:4000${user.photos[0]}`
+                : `https://three4th-street-backend.onrender.com${user.photos[0]}`
               : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?w=600&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8YWZyaWNhJTIwbWFwfGVufDB8fDB8fHww',
           }}
           style={styles.profileImage}
@@ -371,7 +371,7 @@ const PrivateChatScreen = () => {
               uri:
                 user?.photos?.[0]?.startsWith('http')
                   ? user.photos[0]
-                  : `http://192.168.0.169:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+                  : `https://three4th-street-backend.onrender.com${user.photos?.[0]}` || 'https://via.placeholder.com/150',
             }}
             style={styles.profileImage}
           />
@@ -383,7 +383,7 @@ const PrivateChatScreen = () => {
             uri:
               user?.photos?.[0]?.startsWith('http')
                 ? user.photos[0]
-                : `http://192.168.0.169:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+                : `https://three4th-street-backend.onrender.com${user.photos?.[0]}` || 'https://via.placeholder.com/150',
           }}
           style={styles.profileImage}
         /> */}

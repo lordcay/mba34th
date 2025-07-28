@@ -28,6 +28,8 @@ import logo2 from '../assets/logo1.png';
 const TypeScreen = () => {
   const [type, setType] = useState('');
   const navigation = useNavigation();
+  const [error, setError] = useState('');
+
 
 
   useEffect(() => {
@@ -38,14 +40,26 @@ const TypeScreen = () => {
     });
   }, []);
 
+
   const handleNext = () => {
-    if (type.trim() !== '') {
-      // Save the current progress data including the name
-      saveRegistrationProgress('Type', { type });
+    if (!type) {
+      setError('Please select your degree program.');
+      return;
     }
-    // Navigate to the next screen
+
+    saveRegistrationProgress('Type', { type });
     navigation.navigate('PreFinal');
   };
+
+
+  // const handleNext = () => {
+  //   if (type.trim() !== '') {
+  //     // Save the current progress data including the name
+  //     saveRegistrationProgress('Type', { type });
+  //   }
+  //   // Navigate to the next screen
+  //   navigation.navigate('PreFinal');
+  // };
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -169,6 +183,7 @@ const TypeScreen = () => {
               </View>
             </View>
 
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
 
             {/* Next Button */}
@@ -285,4 +300,10 @@ const styles = StyleSheet.create({
   map: { width: '100%', height: 400, marginTop: 20, borderRadius: 5 },
   marker: { backgroundColor: 'black', padding: 8, borderRadius: 5 },
   markerText: { color: 'white', fontSize: 14, fontWeight: '500' },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+
 });

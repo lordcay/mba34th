@@ -29,6 +29,9 @@ const GenderScreen = () => {
 
   const [gender, setGender] = useState('');
   const navigation = useNavigation();
+
+  const [error, setError] = useState('');
+
   useEffect(() => {
     getRegistrationProgress('Gender').then((progressData) => {
       if (progressData) {
@@ -37,15 +40,25 @@ const GenderScreen = () => {
     });
   }, []);
 
-
   const handleNext = () => {
-    if (gender.trim() !== '') {
-      // Save the current progress data including the name
-      saveRegistrationProgress('Gender', { gender });
+    if (!gender) {
+      setError('Please select your gender.');
+      return;
     }
-    // Navigate to the next screen
+
+    saveRegistrationProgress('Gender', { gender });
     navigation.navigate('Type');
   };
+
+
+  // const handleNext = () => {
+  //   if (gender.trim() !== '') {
+  //     // Save the current progress data including the name
+  //     saveRegistrationProgress('Gender', { gender });
+  //   }
+  //   // Navigate to the next screen
+  //   navigation.navigate('Type');
+  // };
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -128,8 +141,11 @@ const GenderScreen = () => {
                     color={gender == 'Non-binary' ? '#581845' : '#F0F0F0'}
                   />
                 </Pressable>
+
               </View>
             </View>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
             {/* Next Button */}
             <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
               <Text style={styles.nextButtonText}>Next</Text>
@@ -240,4 +256,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  errorText: {
+    color: 'red',
+    fontSize: 14,
+    marginTop: 10,
+  },
+
 });

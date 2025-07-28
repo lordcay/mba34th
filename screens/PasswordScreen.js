@@ -32,30 +32,42 @@ const PasswordScreen = () => {
   const [secureText, setSecureText] = useState(true);
 
 
+
   const handleNext = () => {
-    if (password.trim() !== '') {
-      // Save the current progress data including the name
-      saveRegistrationProgress('Password', { password });
+    // Basic validations
+    if (!password || !confirmPassword) {
+      setError('Please enter and confirm your password.');
+      return;
     }
-    // Navigate to the next screen
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
+
+    // ✅ Passed validation: save progress & navigate
+    saveRegistrationProgress('Password', { password });
     navigation.navigate('GenderScreen');
-    // navigation.navigate('Birth');
   };
 
-  //   const handleNext = () => {
-  //     if (password.length < 8) {
-  //       setError('Password must be at least 8 characters.');
-  //       return;
-  //     }
-  //     if (password !== confirmPassword) {
-  //       setError('Passwords do not match.');
-  //       return;
-  //     }
 
-  //     setError('');
+  // const handleNext = () => {
+  //   if (password.trim() !== '') {
+
+  //     // Save the current progress data including the name
   //     saveRegistrationProgress('Password', { password });
-  //     navigation.navigate('ProfileInfo');
-  //   };
+  //   }
+  //   // Navigate to the next screen
+  //   navigation.navigate('GenderScreen');
+  //   // navigation.navigate('Birth');
+  // };
+
+
 
   return (
     <SafeAreaView style={styles.container}>
@@ -77,9 +89,7 @@ const PasswordScreen = () => {
             </View>
           </View>
 
-          {/* Title */}
-          {/* <Text style={styles.title}>Set a Secure Password</Text>
-        <Text style={styles.subtitle}>Create a strong password for your account</Text> */}
+
 
           {/* Password Input */}
 

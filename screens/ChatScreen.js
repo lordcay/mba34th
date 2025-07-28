@@ -28,7 +28,7 @@
 
 //   const fetchConversations = async () => {
 //     try {
-//       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setConversations(res.data);
@@ -69,7 +69,7 @@
 
 //   const getPhotoUri = (photo) => {
 //     if (!photo) return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D';
-//     return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
+//     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
 //   };
 
 //   const renderItem = ({ item }) => {
@@ -313,7 +313,7 @@ const ChatScreen = () => {
 
   const fetchConversations = async () => {
     try {
-      const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+      const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(res.data);
@@ -363,7 +363,7 @@ const ChatScreen = () => {
   const getPhotoUri = (photo) => {
     if (!photo)
       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-    return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
+    return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
   };
 
   const renderItem = ({ item }) => {
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = async () => {
 //     try {
-//       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setConversations(res.data);
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
 //       user?.photos?.[0]?.startsWith('http')
 //         ? user.photos[0]
 //         : user.photos?.[0]
-//           ? `http://192.168.0.169:4000${user.photos[0]}`
+//           ? `https://three4th-street-backend.onrender.com${user.photos[0]}`
 //           : 'https://unsplash.com/photos/brown-and-black-desk-globe-vYGR3b_naPA';
 
 

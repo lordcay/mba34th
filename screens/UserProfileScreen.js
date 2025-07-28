@@ -39,7 +39,7 @@ const UserProfileScreen = () => {
                             user.photos && user.photos.length > 0
                                 ? user.photos[0].startsWith('http')
                                     ? user.photos[0]
-                                    : `http://192.168.0.169:4000${user.photos[0]}`
+                                    : `https://three4th-street-backend.onrender.com${user.photos[0]}`
                                 : 'https://via.placeholder.com/150',
                     }}
                     style={styles.profilePic}
@@ -66,7 +66,7 @@ const UserProfileScreen = () => {
                             <View style={{ alignItems: 'center', marginRight: 12 }}>
                                 <Image
                                     source={{
-                                        uri: item.startsWith('http') ? item : `http://192.168.0.169:4000${item}`,
+                                        uri: item.startsWith('http') ? item : `https://three4th-street-backend.onrender.com${item}`,
                                     }}
                                     style={styles.galleryImage}
                                 />

@@ -195,14 +195,17 @@ const EditProfileScreen = ({ navigation }) => {
   ];
 
   const africanCountries = [
-    'Nigeria', 'Kenya', 'South Africa', 'Ghana', 'Egypt', 'Ethiopia', 'Morocco', 'Uganda',
-    'Tanzania', 'Algeria', 'Angola', 'Zimbabwe', 'Cameroon', 'Rwanda', 'Senegal', 'Zambia',
-    'Botswana', 'Namibia', 'Sudan', 'Somalia', 'Libya', 'Tunisia', 'Ivory Coast', 'Mali',
-    'Burkina Faso', 'Benin', 'Niger', 'Chad', 'Mozambique', 'Malawi', 'Togo', 'Sierra Leone',
-    'Liberia', 'Congo (DRC)', 'Congo (Republic)', 'Gabon', 'Equatorial Guinea', 'Gambia',
-    'Mauritius', 'Lesotho', 'Swaziland (Eswatini)', 'Djibouti', 'Guinea', 'Guinea-Bissau',
-    'Eritrea', 'Comoros', 'Seychelles', 'Cape Verde', 'Central African Republic'
+    'Algeria', 'Angola', 'Benin', 'Botswana', 'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cameroon', 'Central African Republic', 'Chad', 'Comoros', 'Rep. of the Congo', 'Djibouti', 'Egypt', 'Equatorial Guinea', 'Eritrea', 'Eswatini', 'Ethiopia', 'Gabon', 'Gambia', 'Ghana', 'Guinea', 'Guinea-Bissau', 'Ivory Coast', 'Kenya', 'Lesotho', 'Liberia', 'Libya', 'Madagascar', 'Malawi', 'Mali', 'Mauritania', 'Mauritius', 'Morocco', 'Mozambique', 'Namibia', 'Niger', 'Nigeria', 'Rwanda', 'São Tomé and Príncipe', 'Senegal', 'Seychelles', 'Sierra Leone', 'Somalia', 'South Africa', 'South Sudan', 'Sudan', 'Tanzania', 'Togo', 'Tunisia', 'Uganda', 'Zambia', 'Zimbabwe'
   ];
+  // const africanCountries = [
+  //   'Nigeria', 'Kenya', 'South Africa', 'Ghana', 'Egypt', 'Ethiopia', 'Morocco', 'Uganda',
+  //   'Tanzania', 'Algeria', 'Angola', 'Zimbabwe', 'Cameroon', 'Rwanda', 'Senegal', 'Zambia',
+  //   'Botswana', 'Namibia', 'Sudan', 'Somalia', 'Libya', 'Tunisia', 'Ivory Coast', 'Mali',
+  //   'Burkina Faso', 'Benin', 'Niger', 'Chad', 'Mozambique', 'Malawi', 'Togo', 'Sierra Leone',
+  //   'Liberia', 'Congo (DRC)', 'Congo (Republic)', 'Gabon', 'Equatorial Guinea', 'Gambia',
+  //   'Mauritius', 'Lesotho', 'Swaziland (Eswatini)', 'Djibouti', 'Guinea', 'Guinea-Bissau',
+  //   'Eritrea', 'Comoros', 'Seychelles', 'Cape Verde', 'Central African Republic'
+  // ];
 
 
 
@@ -342,7 +345,7 @@ const EditProfileScreen = ({ navigation }) => {
       };
 
       const res = await axios.put(
-        `http://192.168.0.169:4000/accounts/${userId}`,
+        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -1313,7 +1316,7 @@ const styles = StyleSheet.create({
 //       };
 
 //       const res = await axios.put(
-//         `http://192.168.0.169:4000/accounts/${userId}`,
+//         `https://three4th-street-backend.onrender.com/accounts/${userId}`,
 //         payload,
 //         {
 //           headers: {

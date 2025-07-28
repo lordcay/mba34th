@@ -90,7 +90,7 @@
 
 //   //       console.log('Attempting to register user with data:', userData);
 
-//   //       const response = await axios.post('http://192.168.0.169:4000/accounts/register', userData);
+//   //       const response = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', userData);
 //   //       console.log('Register response:', response.data);
 
 //   //       const { token, userId } = response.data;
@@ -153,7 +153,7 @@
 //         interests: userData.interests || [],
 //       };
 
-//       const response = await axios.post('http://192.168.0.169:4000/accounts/register', payload);
+//       const response = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
 //       console.log('Register response:', response.data);
 
 //       const { token, userId } = response.data;
@@ -196,7 +196,7 @@
 //         const userId = decodedToken.userId;
 //         console.log('Decoded Token User ID:', userId);
 
-//         const response = await axios.get(`http://192.168.0.169:4000/users/${userId}`);
+//         const response = await axios.get(`https://three4th-street-backend.onrender.com/users/${userId}`);
 
 //         if (!response.data.user || !response.data.user.isVerified) {
 //           console.log('User not verified. Redirecting to VerifyOTP.');
@@ -357,7 +357,7 @@ const PreFinalScreen = () => {
         bio: userData.bio || '',
         interests: userData.interests || [],
       };
-      const res = await axios.post('http://192.168.0.169:4000/accounts/register', payload);
+      const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
       const { userId } = res.data;
       navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
       clearAllScreenData();

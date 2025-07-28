@@ -154,7 +154,7 @@ const EditProfileScreen = ({ navigation }) => {
             if (interests.length) formData.append('interests', JSON.stringify(interests));
             if (photos.length) formData.append('photos', JSON.stringify(photos));
 
-            const res = await axios.put(`http://192.168.0.169:4000/accounts/${userId}`, formData, {
+            const res = await axios.put(`https://three4th-street-backend.onrender.com/accounts/${userId}`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                     Authorization: `Bearer ${token}`,

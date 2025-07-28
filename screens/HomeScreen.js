@@ -75,7 +75,7 @@ const HomeScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.heading}>Meet Verified Students</Text>
+      <Text style={styles.heading}>Meet Verified members</Text>
 
       <FlatList
         data={verifiedUsers}
@@ -106,7 +106,7 @@ const HomeScreen = () => {
                     source={{
                       uri: photo.startsWith('http')
                         ? photo
-                        : `http://192.168.0.169:4000${photo}`,
+                        : `https://three4th-street-backend.onrender.com${photo}`,
                     }}
                     style={styles.image}
                     resizeMode="cover"
