@@ -67,18 +67,7 @@ const VerifyOTPScreen = () => {
   }
 
 
-  // if (loading) {
-  //     return (
-  //       <View style={styles.loaderContainer}>
-  //         <LottieView
-  //           source={require('../assets/loader.json')}
-  //           autoPlay
-  //           loop
-  //           style={{ width: 200, height: 200 }}
-  //         />
-  //       </View>
-  //     );
-  //   }
+
 
 
   return (

@@ -52,14 +52,7 @@ const TypeScreen = () => {
   };
 
 
-  // const handleNext = () => {
-  //   if (type.trim() !== '') {
-  //     // Save the current progress data including the name
-  //     saveRegistrationProgress('Type', { type });
-  //   }
-  //   // Navigate to the next screen
-  //   navigation.navigate('PreFinal');
-  // };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -80,9 +73,7 @@ const TypeScreen = () => {
             </View>
           </View>
 
-          {/* Title */}
-          {/* <Text style={styles.title}>Set a Secure Password</Text>
-      <Text style={styles.subtitle}>Create a strong password for your account</Text> */}
+
 
           {/* Password Input */}
           <View style={styles.section}>
@@ -97,9 +88,6 @@ const TypeScreen = () => {
               Select your degree program
             </Text>
 
-            {/* <Text style={{marginTop: 30, fontSize: 15, color: 'gray'}}>
-          34th Street users are matched based on these three gender 
-        </Text> */}
 
             <View style={{ marginTop: 30, flexDirection: 'column', gap: 12 }}>
 

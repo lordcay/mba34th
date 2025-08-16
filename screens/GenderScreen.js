@@ -50,15 +50,6 @@ const GenderScreen = () => {
     navigation.navigate('Type');
   };
 
-
-  // const handleNext = () => {
-  //   if (gender.trim() !== '') {
-  //     // Save the current progress data including the name
-  //     saveRegistrationProgress('Gender', { gender });
-  //   }
-  //   // Navigate to the next screen
-  //   navigation.navigate('Type');
-  // };
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView

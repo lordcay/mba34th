@@ -344,22 +344,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
 
-  // buttonsRow: {
-  //   flexDirection: 'row',
-  //   justifyContent: 'space-around',
-  //   paddingVertical: 10,
-  //   paddingHorizontal: 16,
-  //   backgroundColor: '#fff',
-  //   borderBottomWidth: 0.5,
-  //   borderColor: '#eee',
-  // },
-  // iconButton: {
-  //   backgroundColor: '#fafafa',
-  //   padding: 10,
-  //   borderRadius: 30,
-  //   elevation: 2,
-  // },
-
   error: {
     fontSize: 14,
     color: 'red',
