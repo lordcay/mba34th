@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -16,7 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.coredevhub.34thstreet",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
+        "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
+        "NSCameraUsageDescription": "We need camera access so you can take a new profile picture."
       }
     },
     "android": {
@@ -31,7 +34,14 @@
     },
     "plugins": [
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow 34thstreet to access your photos so you can upload a profile picture.",
+          "cameraPermission": "Allow 34thstreet to access your camera to take a new profile picture."
+        }
+      ]
     ],
     "extra": {
       "eas": {

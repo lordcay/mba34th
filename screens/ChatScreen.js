@@ -83,8 +83,21 @@ const ChatScreen = () => {
     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
   };
 
+  const formatSchoolFromEmail = (email) => {
+    const raw = email?.split('@')[1]?.split('.')[0];
+    if (!raw) return 'Unknown';
+    return raw
+      .replace(/[-_]/g, ' ')          // turn hyphens/underscores into spaces
+      .trim()
+      .split(/\s+/)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+
   const renderItem = ({ item }) => {
-    const school = item.email?.split('@')[1]?.split('.')[0] || 'Unknown';
+    // const school = item.email?.split('@')[1]?.split('.')[0] || 'Unknown';
+    const school = formatSchoolFromEmail(item.email);
 
     const user = {
       id: item.userId || item._id,

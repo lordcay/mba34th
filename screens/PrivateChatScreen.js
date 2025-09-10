@@ -1,9 +1,6 @@
 
 
-
-
-
-import React, { useEffect, useState, useContext } from 'react';
+import React, { useEffect, useState, useContext, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,8 +35,30 @@ const PrivateChatScreen = () => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
+  const MIN_INPUT_HEIGHT = 40;
+  const MAX_INPUT_HEIGHT = 140;
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT_HEIGHT);
+  const inputRef = useRef(null);
 
-  const schoolFromEmail = user.email.split('@')[1]?.split('.')[0] || 'Unknown School';
+  const formatSchoolFromEmail = (email) => {
+    const raw = email?.split('@')[1]?.split('.')[0];
+    if (!raw) return 'Unknown School';
+    return raw
+      .replace(/[-_]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+
+  // const schoolFromEmail = user.email.split('@')[1]?.split('.')[0] || 'Unknown School';
+
+
+  const schoolFromEmail = formatSchoolFromEmail(user?.email);
+
+
+
 
   useEffect(() => {
     socket.on('connect', () => {
@@ -82,6 +101,9 @@ const PrivateChatScreen = () => {
     }
   };
 
+
+
+
   const handleSend = async () => {
     if (!input.trim()) return;
 
@@ -97,6 +119,8 @@ const PrivateChatScreen = () => {
       });
       setMessages([res.data, ...messages]); // add new message
       setInput('');
+      setInputHeight(MIN_INPUT_HEIGHT);
+
     } catch (err) {
       console.error('Failed to send message:', err);
     }
@@ -164,6 +188,8 @@ const PrivateChatScreen = () => {
         keyboardVerticalOffset={90}
       >
         <FlatList
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item, index) => index.toString()}
@@ -172,26 +198,51 @@ const PrivateChatScreen = () => {
         />
 
         {/* 💬 Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            value={input}
-            onChangeText={text => {
-              setInput(text);
-              setIsTyping(text.length > 0);
-            }}
-            placeholder="Type a message..."
-            style={styles.input}
-          />
-          {isTyping && (
-            <Text style={styles.typingIndicator}>
-              You’re typing...
-            </Text>
-          )}
 
-          <TouchableOpacity onPress={handleSend} style={styles.sendButton}>
-            <Ionicons name="send" size={24} color="#fff" />
+        {/* {isTyping ? <Text style={styles.typingHint}>You’re typing…</Text> : null} */}
+
+        <View style={styles.composerBar}>
+          {/* Focus the field when wrapper is tapped (Android nicety) */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={styles.inputWrapper}
+            onPress={() => inputRef.current?.focus()}
+          >
+            <TextInput
+              ref={inputRef}
+              style={styles.composerInput}          // ⬅️ no fixed height
+              value={input}
+              onChangeText={(t) => {
+                setInput(t);
+                setIsTyping(t.length > 0);
+              }}
+              placeholder="Type a message…"
+              placeholderTextColor="#999"
+              selectionColor="#581845"
+              underlineColorAndroid="transparent"
+              multiline
+              textAlignVertical="top"
+              onContentSizeChange={(e) => setInputHeight(e.nativeEvent.contentSize.height)}
+              scrollEnabled={inputHeight > (MAX_INPUT_HEIGHT - 4)}   // inner scroll when tall
+              blurOnSubmit={false}
+              returnKeyType="default"
+              autoCorrect
+              autoCapitalize="sentences"
+              keyboardAppearance={Platform.OS === 'ios' ? 'light' : undefined}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={handleSend}
+            disabled={!input.trim()}
+            style={[styles.sendFab, !input.trim() && { opacity: 0.4 }]}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
+
+
+
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -291,4 +342,92 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  typingHint: {
+    marginLeft: 12,
+    marginBottom: 4,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+
+  // composerBar: {
+  //   flexDirection: 'row',
+  //   alignItems: 'flex-end',
+  //   paddingHorizontal: 10,
+  //   paddingTop: 8,
+  //   paddingBottom: Platform.OS === 'ios' ? 16 : 8,
+  //   borderTopWidth: 1,
+  //   borderTopColor: '#eee',
+  //   backgroundColor: '#fff',
+  //   gap: 8,
+  // },
+
+  // inputWrapper: {
+  //   flex: 1,
+  //   backgroundColor: '#f5f5f7',
+  //   borderRadius: 22,
+  //   borderWidth: 1,
+  //   borderColor: '#eee',
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 6,
+  //   maxHeight: 160, // visual cap (matches MAX_INPUT_HEIGHT + padding)
+  // },
+
+  // composerInput: {
+  //   minHeight: 40,   // = MIN_INPUT_HEIGHT
+  //   maxHeight: 140,  // = MAX_INPUT_HEIGHT
+  //   fontSize: 16,
+  //   lineHeight: 22,
+  //   padding: 0,      // wrapper provides padding
+  //   color: '#111',
+  //   includeFontPadding: false, // Android: better caret/baseline
+  // },
+
+  // sendFab: {
+  //   backgroundColor: '#581845',
+  //   borderRadius: 22,
+  //   paddingHorizontal: 14,
+  //   paddingVertical: 10,
+  //   alignItems: 'center',
+  //   justifyContent: 'center',
+  // },
+  composerBar: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',              // keeps send aligned when input grows
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 16 : 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  iconBtn: {
+    padding: 6,
+  },
+  inputWrapper: {
+    flex: 1,
+    backgroundColor: '#f5f5f7',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#eee',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    maxHeight: 160, // visual cap; actual cap enforced by MAX_INPUT_HEIGHT
+  },
+  composerInput: {
+    fontSize: 16,
+    lineHeight: 22,
+    // TextInput will get dynamic height; ensure it can shrink/grow nicely
+    padding: 0,      // we already padded the wrapper
+    color: '#111',
+  },
+  sendFab: {
+    backgroundColor: '#581845',
+    borderRadius: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
 });

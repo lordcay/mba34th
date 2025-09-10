@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Linking, Platform } from 'react-native';
+// import * as ImagePicker from 'expo-image-picker';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
@@ -22,6 +24,9 @@ import { Ionicons } from '@expo/vector-icons'; // For image delete icon
 // import { useContext } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
+// add this with your other imports
+// import { Linking } from 'react-native';
+
 
 
 
@@ -43,16 +48,16 @@ const EditProfileScreen = ({ navigation }) => {
   const [bio, setBio] = useState('');
   const [interests, setInterests] = useState([]);
   const [photos, setPhotos] = useState([]);
-  const [nickname, setNickname] = useState([]);
-  const [dob, setDob] = useState([]);
-  const [languages, setLanguages] = useState([]);
-  const [fieldOfStudy, setFieldOfStudy] = useState([]);
-  const [graduationYear, setGraduationYear] = useState([]);
-  const [industry, setIndustry] = useState([]);
-  const [currentRole, setCurrentRole] = useState([]);
-  const [linkedIn, setLinkedIn] = useState([]);
-  const [funFact, setFunFact] = useState([]);
-  const [rship, setRship] = useState([]);
+  const [nickname, setNickname] = useState('');
+  const [dob, setDob] = useState('');
+  const [languages, setLanguages] = useState('');
+  const [fieldOfStudy, setFieldOfStudy] = useState('');
+  const [graduationYear, setGraduationYear] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [currentRole, setCurrentRole] = useState('');
+  const [linkedIn, setLinkedIn] = useState('');
+  const [funFact, setFunFact] = useState('');
+  const [rship, setRship] = useState('');
   const [loading, setLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   // const [showGradYearPicker, setShowGradYearPicker] = useState(false);
@@ -67,8 +72,58 @@ const EditProfileScreen = ({ navigation }) => {
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [originSearch, setOriginSearch] = useState('');
 
 
+  // const toLocalYYYYMMDD = (dateObj) => {
+  //   const y = dateObj.getFullYear();
+  //   const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  //   const d = String(dateObj.getDate()).padStart(2, '0');
+  //   return `${y}-${m}-${d}`;
+  // };
+
+  // const prettyDate = (val) => {
+  //   if (!val) return '';
+  //   const d = typeof val === 'string' ? new Date(val) : val;
+  //   // Localized nice string (e.g., January 12, 1995)
+  //   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+  // };
+
+
+  // // --- DOB state
+  // const [showDobModal, setShowDobModal] = useState(false);   // iOS modal
+  // const [pendingDob, setPendingDob] = useState(null);        // temp selection for iOS
+
+  // Keep these where your other helpers/states are
+  const toLocalYYYYMMDD = (dateObj) => {
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  // Parse incoming values safely (handles "YYYY-MM-DD", ISO strings, Date)
+  const parseDobToDate = (val) => {
+    if (!val) return null;
+    if (val instanceof Date) return val;
+    if (typeof val === 'string') {
+      const onlyDate = val.split('T')[0]; // take date part if ISO
+      // force local midnight to avoid timezone shifts
+      return new Date(`${onlyDate}T00:00:00`);
+    }
+    // fallback for numbers or other serializable types
+    const d = new Date(val);
+    return isNaN(d) ? null : d;
+  };
+
+  const prettyDate = (val) => {
+    const d = parseDobToDate(val);
+    return d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+  };
+
+  // iOS DOB modal temp selection
+  const [showDobModal, setShowDobModal] = useState(false);
+  const [pendingDob, setPendingDob] = useState(null);
 
 
 
@@ -81,7 +136,16 @@ const EditProfileScreen = ({ navigation }) => {
       setOrigin(user.origin || '');
       setBio(user.bio || '');
       setNickname(user.nickname || '');
-      setDob(user.dob || '');
+      // NEW — accept multiple backend keys and normalize
+      const rawDob = user?.DOB ?? user?.dob ?? user?.dateOfBirth ?? '';
+      if (rawDob) {
+        const parsed = parseDobToDate(rawDob);
+        setDob(parsed ? toLocalYYYYMMDD(parsed) : '');
+      } else {
+        setDob('');
+      }
+
+      // setDob(user.dob || '');
       setLanguages(Array.isArray(user.languages) ? user.languages.join(', ') : user.languages || '');
 
       // setLanguages(user.languages || '');
@@ -101,121 +165,85 @@ const EditProfileScreen = ({ navigation }) => {
 
 
 
+
+
   const pickImage = async () => {
     try {
-      const existing = await ImagePicker.getMediaLibraryPermissionsAsync();
-      if (!existing.granted) {
-        const req = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!req.granted) {
-          Alert.alert(
-            'Permission needed',
-            'Please allow photo access to upload a profile picture.'
-          );
-          return;
-        }
+      // 1) Permissions – no options argument here (avoids the TestFlight crash)
+      let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        perm = await ImagePicker.requestMediaLibraryPermissionsAsync(); // <-- no args
       }
 
-      // ✅ Handle both old and new APIs
+      if (!perm.granted) {
+        Alert.alert(
+          'Permission needed',
+          'Please allow photo access to upload a profile picture.',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings?.() },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
+      // 2) Picker options (backwards/forwards compatible)
       const pickerOptions = {
         allowsEditing: true,
         quality: 1,
-        base64: true,
         exif: false,
       };
 
-      if (ImagePicker?.MediaType) {
-        // New API (SDKs with MediaType)
+      if (ImagePicker?.MediaType?.Image) {
+        // Newer SDKs
         pickerOptions.mediaTypes = [ImagePicker.MediaType.Image];
-      } else {
-        // Old API (your current version)
+      } else if (ImagePicker?.MediaTypeOptions?.Images) {
+        // Older SDKs
         pickerOptions.mediaTypes = ImagePicker.MediaTypeOptions.Images;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
       if (result.canceled) return;
 
-      const { uri } = result.assets[0];
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        Alert.alert('Error', 'No image selected.');
+        return;
+      }
 
+      // 3) Resize/compress for faster uploads
       const manipulated = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 800 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        asset.uri,
+        [{ resize: { width: 1000 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
       );
 
-      const formData = new FormData();
-      formData.append('file', {
+      // 4) Upload to Cloudinary via FormData (safer than base64)
+      const data = new FormData();
+      data.append('file', {
         uri: manipulated.uri,
+        name: `profile_${Date.now()}.jpg`,
         type: 'image/jpeg',
-        name: 'upload.jpg',
       });
-      formData.append('upload_preset', UPLOAD_PRESET); // no slashes in the name
+      // Make sure UPLOAD_PRESET has no slashes/spaces and is configured for unsigned uploads
+      data.append('upload_preset', UPLOAD_PRESET);
+      // If your unsigned preset ALLOWS specifying a folder, you can uncomment this:
+      // data.append('folder', '34thstreet_profile');
 
-      const cloudRes = await fetch(CLOUDINARY_URL, { method: 'POST', body: formData });
-      const cloudData = await cloudRes.json();
+      const uploadRes = await fetch(CLOUDINARY_URL, { method: 'POST', body: data });
+      const json = await uploadRes.json();
+      console.log('Cloudinary response:', json);
 
-      if (cloudData.secure_url) {
-        setPhotos(prev => [...prev, cloudData.secure_url]);
+      if (json.secure_url) {
+        setPhotos(prev => [...prev, json.secure_url]);
       } else {
-        console.log('Cloudinary response:', cloudData);
-        Alert.alert('Upload failed', cloudData?.error?.message || 'Try again.');
+        Alert.alert('Upload failed', json?.error?.message || 'Try again.');
       }
     } catch (e) {
       console.log('pickImage error:', e);
-      Alert.alert('Error', 'Could not open gallery.');
+      Alert.alert('Could not open gallery', String(e?.message || e));
     }
   };
-
-
-
-
-  // const pickImage = async () => {
-  //   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  //   if (!permission.granted) {
-  //     alert('Permission to access media library is required!');
-  //     return;
-  //   }
-
-  //   const result = await ImagePicker.launchImageLibraryAsync({
-  //     allowsEditing: true,
-  //     quality: 1,
-  //     mediaTypes: ImagePicker.MediaTypeOptions.Images,
-  //     base64: true,            // <- IMPORTANT
-  //     exif: false,
-  //   });
-
-  //   if (!result.canceled) {
-  //     const uri = result.assets?.[0]?.uri || result.uri;
-  //     const manipulated = await ImageManipulator.manipulateAsync(
-  //       uri,
-  //       [{ resize: { width: 800 } }],
-  //       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-  //     );
-
-  //     const formData = new FormData();
-  //     formData.append('file', {
-  //       uri: manipulated.uri,
-  //       type: 'image/jpeg',
-  //       name: 'upload.jpg',
-  //     });
-  //     formData.append('upload_preset', UPLOAD_PRESET);
-
-  //     try {
-  //       const cloudRes = await fetch(CLOUDINARY_URL, {
-  //         method: 'POST',
-  //         body: formData,
-  //         // headers: { 'Content-Type': 'multipart/form-data' },
-  //       });
-
-  //       const cloudData = await cloudRes.json();
-  //       if (cloudData.secure_url) {
-  //         setPhotos(prev => [...prev, cloudData.secure_url]);
-  //       }
-  //     } catch (err) {
-  //       console.error('Upload error:', err);
-  //       Alert.alert('Error', 'Image upload failed.');
-  //     }
-  //   }
-  // };
 
   const setAsProfilePhoto = (index) => {
     if (index === 0) return;
@@ -310,12 +338,12 @@ const EditProfileScreen = ({ navigation }) => {
     );
   };
 
-  const handleDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || new Date(dob || Date.now());
-    setShowDatePicker(false);
-    const formattedDate = currentDate.toISOString().split('T')[0]; // "yyyy-mm-dd"
-    setDob(formattedDate);
-  };
+  // const handleDateChange = (event, selectedDate) => {
+  //   const currentDate = selectedDate || new Date(dob || Date.now());
+  //   setShowDatePicker(false);
+  //   const formattedDate = currentDate.toISOString().split('T')[0]; // "yyyy-mm-dd"
+  //   setDob(formattedDate);
+  // };
 
   const handleGraduationYearChange = (event, selectedDate) => {
     setShowGradYearPicker(false);
@@ -327,52 +355,13 @@ const EditProfileScreen = ({ navigation }) => {
   };
 
 
-  const pickImages = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      alert('Permission to access media library is required!');
-      return;
-    }
+  // helpers (accent/diacritics-insensitive search)
+  const strip = (s = '') =>
+    s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      quality: 1,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    });
-
-    if (!result.canceled) {
-      const uri = result.assets?.[0]?.uri || result.uri;
-      const manipulated = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 800 } }],
-        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      const formData = new FormData();
-      formData.append('file', {
-        uri: manipulated.uri,
-        type: 'image/jpeg',
-        name: 'upload.jpg',
-      });
-      formData.append('upload_preset', UPLOAD_PRESET);
-
-      try {
-        const cloudRes = await fetch(CLOUDINARY_URL, {
-          method: 'POST',
-          body: formData,
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-
-        const cloudData = await cloudRes.json();
-        if (cloudData.secure_url) {
-          setPhotos(prev => [...prev, cloudData.secure_url]);
-        }
-      } catch (err) {
-        console.error('Upload error:', err);
-        Alert.alert('Error', 'Image upload failed.');
-      }
-    }
-  };
+  const filteredCountries = africanCountries.filter(c =>
+    strip(c).includes(strip(originSearch))
+  );
 
 
 
@@ -415,6 +404,7 @@ const EditProfileScreen = ({ navigation }) => {
         bio,
         nickname,
         DOB: dob,
+        dob: dob,
         languages: languages.split(',').map(lang => lang.trim()),
         graduationYear,
         industry: industry.replace(/^[^\w]+ /, ''),
@@ -463,7 +453,7 @@ const EditProfileScreen = ({ navigation }) => {
     <ScrollView style={styles.container}>
       <Text style={styles.header}>Edit Your Profile</Text>
 
-      <Text style={styles.label}>Nickname</Text>
+      <Text style={styles.label}>Nickname <Text style={styles.required}>*</Text></Text>
       <TextInput
         style={styles.input}
         value={nickname}
@@ -491,7 +481,78 @@ const EditProfileScreen = ({ navigation }) => {
         </Text>
       </TouchableOpacity>
 
-      {showOriginPicker && (
+      <Modal
+        isVisible={showOriginPicker}
+        onBackdropPress={() => { setShowOriginPicker(false); setOriginSearch(''); }}
+        onBackButtonPress={() => { setShowOriginPicker(false); setOriginSearch(''); }}
+        style={styles.originModal}
+        backdropOpacity={0.35}
+        useNativeDriver
+        useNativeDriverForBackdrop
+        statusBarTranslucent
+        avoidKeyboard
+      >
+        <View style={styles.originCard}>
+          {/* Header */}
+          <View style={styles.originHeader}>
+            <Text style={styles.originTitle}>Select Country</Text>
+            <TouchableOpacity
+              onPress={() => { setShowOriginPicker(false); setOriginSearch(''); }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={22} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search */}
+          <View style={styles.originSearchRow}>
+            <Ionicons name="search" size={18} color="#888" style={{ marginHorizontal: 8 }} />
+            <TextInput
+              style={styles.originSearchInput}
+              placeholder="Search country..."
+              value={originSearch}
+              onChangeText={setOriginSearch}
+              autoCorrect={false}
+              autoFocus
+              returnKeyType="search"
+            />
+          </View>
+
+          {/* List */}
+          <ScrollView
+            style={styles.originList}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 8 }}
+          >
+            {(filteredCountries.length ? filteredCountries : africanCountries).map((country, i) => {
+              const selected = country === origin;
+              return (
+                <TouchableOpacity
+                  key={`${country}-${i}`}
+                  style={[styles.originItem, selected && styles.originItemSelected]}
+                  onPress={() => {
+                    setOrigin(country);
+                    setShowOriginPicker(false);
+                    setOriginSearch('');
+                  }}
+                >
+                  <Text style={[styles.originItemText, selected && styles.originItemTextSelected]}>
+                    {country}
+                  </Text>
+                  {selected && <Ionicons name="checkmark" size={18} color="#581845" />}
+                </TouchableOpacity>
+              );
+            })}
+
+            {filteredCountries.length === 0 && (
+              <Text style={styles.originEmpty}>No matches</Text>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+
+      {/* {showOriginPicker && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <ScrollView style={{ maxHeight: 300 }}>
@@ -516,12 +577,109 @@ const EditProfileScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
         </View>
-      )}
-
-
-
+      )} */}
 
       <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
+      <TouchableOpacity
+        style={styles.input}
+        onPress={() => {
+          const base = dob ? parseDobToDate(dob) : new Date(2000, 0, 1);
+
+          // const base = dob ? new Date(dob) : new Date(2000, 0, 1); // default to Jan 1, 2000
+          if (Platform.OS === 'ios') {
+            setPendingDob(base);
+            setShowDobModal(true);
+          } else {
+            setPendingDob(base);
+            setShowDatePicker(true); // Android native dialog has OK/Cancel already
+          }
+        }}
+      >
+        <Text style={{ color: dob ? '#000' : '#999' }}>
+          {dob ? prettyDate(dob) : 'Select your birth date'}
+        </Text>
+      </TouchableOpacity>
+
+      {/* ANDROID: system date dialog with OK/Cancel */}
+      {showDatePicker && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={pendingDob || (dob ? parseDobToDate(dob) : new Date(2000, 0, 1))}
+
+          // value={pendingDob || (dob ? new Date(dob) : new Date(2000, 0, 1))}
+          mode="date"
+          display="calendar"
+          maximumDate={new Date()}
+          minimumDate={new Date(1900, 0, 1)}
+          onChange={(event, selected) => {
+            // Android emits 'set' on confirm and 'dismissed' on cancel
+            setShowDatePicker(false);
+            if (event.type === 'set' && selected) {
+              setDob(toLocalYYYYMMDD(selected)); // save in local time -> fixes "day after"
+            }
+          }}
+        />
+      )}
+
+      {/* iOS: elegant modal with Cancel / Done */}
+      <Modal
+        isVisible={showDobModal}
+        onBackdropPress={() => setShowDobModal(false)}
+        onBackButtonPress={() => setShowDobModal(false)}
+        style={styles.dobModal}
+        backdropOpacity={0.35}
+        useNativeDriver
+        useNativeDriverForBackdrop
+        statusBarTranslucent
+        avoidKeyboard
+      >
+        <View style={styles.dobCard}>
+          <View style={styles.dobHeader}>
+            <TouchableOpacity onPress={() => setShowDobModal(false)} style={styles.dobBtn}>
+              <Text style={[styles.dobBtnText, { color: '#666' }]}>Cancel</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.dobTitle}>Select Date of Birth</Text>
+
+            <TouchableOpacity
+              onPress={() => {
+                if (pendingDob) setDob(toLocalYYYYMMDD(pendingDob)); // save in local time
+                setShowDobModal(false);
+              }}
+              style={styles.dobBtn}
+            >
+              <Text style={[styles.dobBtnText, { color: '#581845', fontWeight: '700' }]}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.dobPickerWrap}>
+            <DateTimePicker
+              value={pendingDob || (dob ? parseDobToDate(dob) : new Date(2000, 0, 1))}
+
+              // value={pendingDob || (dob ? new Date(dob) : new Date(2000, 0, 1))}
+              mode="date"
+              display="spinner"               // iOS inline wheel
+              maximumDate={new Date()}
+              minimumDate={new Date(1900, 0, 1)}
+              onChange={(_, selected) => {
+                // iOS emits continuously while scrolling—just cache, don’t save
+                if (selected) setPendingDob(selected);
+              }}
+              themeVariant="light"
+              textColor="#000"
+              style={{ alignSelf: 'center' }}
+            />
+          </View>
+
+          {/* Live preview under the wheel */}
+          <Text style={styles.dobPreview}>
+            {pendingDob ? prettyDate(pendingDob) : prettyDate(dob || new Date(2000, 0, 1))}
+          </Text>
+        </View>
+      </Modal>
+
+
+
+      {/* <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
       <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.input}>
         <Text style={{ color: dob ? '#000' : '#999' }}>
           {dob ? dob : 'Select your birth date'}
@@ -536,7 +694,7 @@ const EditProfileScreen = ({ navigation }) => {
           onChange={handleDateChange}
           maximumDate={new Date()}
         />
-      )}
+      )} */}
 
 
 
@@ -551,7 +709,7 @@ const EditProfileScreen = ({ navigation }) => {
 
 
 
-      <Text style={styles.label}>Field of Study <Text style={styles.required}>*</Text></Text>
+      <Text style={styles.label}>program of Study <Text style={styles.required}>*</Text></Text>
       <TextInput
         style={styles.input}
         value={fieldOfStudy}
@@ -789,8 +947,8 @@ export default EditProfileScreen;
 
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: '#fff' },
-  header: { fontSize: 24, fontWeight: '700', color: '#581845', marginBottom: 20 },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff', marginTop: 20, },
+  header: { fontSize: 24, fontWeight: '700', color: '#581845', marginBottom: 20, marginTop: 60, },
 
   label: {
     marginTop: 15,
@@ -1065,7 +1223,134 @@ const styles = StyleSheet.create({
     color: 'red',
   },
 
+  originModal: {
+    margin: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  originCard: {
+    width: '88%',
+    maxHeight: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  originHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  originTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  originSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f7',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    height: 44,
+  },
+  originSearchInput: {
+    flex: 1,
+    fontSize: 16,
+  },
+  originList: {
+    paddingHorizontal: 6,
+  },
+  originItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  originItemSelected: {
+    backgroundColor: '#f7eef5', // subtle accent
+    borderLeftWidth: 3,
+    borderLeftColor: '#581845',
+  },
+  originItemText: {
+    fontSize: 16,
+    color: '#222',
+  },
+  originItemTextSelected: {
+    color: '#581845',
+    fontWeight: '600',
+  },
+  originEmpty: {
+    textAlign: 'center',
+    paddingVertical: 16,
+    color: '#888',
+  },
 
+  dobModal: {
+    margin: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dobCard: {
+    width: '88%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 10,
+  },
+  dobHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  dobTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111',
+  },
+  dobBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+    minWidth: 64,
+    alignItems: 'center',
+  },
+  dobBtnText: {
+    fontSize: 16,
+  },
+  dobPickerWrap: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+  },
+  dobPreview: {
+    textAlign: 'center',
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#eee',
+  }
 
 
 

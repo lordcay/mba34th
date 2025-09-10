@@ -194,7 +194,15 @@ const ProfileScreen = () => {
       <View style={styles.section}>
 
         <Text style={styles.sectionTitle}>Academic Details</Text>
-        <InfoRow label="University" value={school} />
+        <InfoRow
+          label="University"
+          value={school
+            .split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ')
+          }
+        />
+        {/* <InfoRow label="University" value={school} /> */}
         <InfoRow label="Program of Study" value={user.fieldOfStudy} />
         <InfoRow label="Field of Study" value={user.type} />
         <InfoRow label="Graduation Year" value={user.graduationYear} />

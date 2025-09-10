@@ -25,6 +25,8 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import logo2 from '../assets/logo1.png';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -74,28 +76,7 @@ const LoginScreen = () => {
   };
 
 
-  // const signInUser = async () => {
-  //   setLoading(true);
-  //   if (!email || !password) {
-  //     Alert.alert('Fill all fields');
-  //     setLoading(false);
-  //     return;
-  //   }
 
-  //   try {
-  //     const response = await axios.post(
-  //       'https://three4th-street-backend.onrender.com/accounts/authenticate',
-  //       { email: email.trim(), password: password.trim() }
-  //     );
-  //     const { token, id } = response.data;
-  //     await login(token, id);
-  //     navigation.reset({ index: 0, routes: [{ name: 'MainStack' }] });
-  //   } catch (error) {
-  //     Alert.alert('Login failed', error?.response?.data?.message || 'Please try again.');
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
 
   return (
     <SafeAreaView style={styles.container}>

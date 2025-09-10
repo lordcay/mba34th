@@ -767,12 +767,16 @@ import IMG_VILLAGE from '../assets/2.jpg';
 import IMG_INTCH from '../assets/3.jpg';
 import IMG_ALU from '../assets/1.jpg';
 import IMG_OPP from '../assets/4.jpg';
+import IMG_EV from '../assets/5.jpg';
+import IMG_FH from '../assets/6.jpg';
 
 const CHATROOM_IMAGES = {
     'The Village Drum': IMG_VILLAGE,
     'Internship Chronicles': IMG_INTCH,
     'Alumni Moves': IMG_ALU,            // (spelling kept as provided)
     'Opportunity Market': IMG_OPP,
+    'Events & Vibes': IMG_EV,
+    'Founders’ Hut': IMG_FH,
 };
 
 // ── House Rules (provided) ────────────────────────────────────────
@@ -793,7 +797,11 @@ const roomDescriptions = {
 
     "Alumni Moves": `This is where the real talk begins — the hustle, the moves, the transitions. This is where we keep it real about what comes after the cap and gown. No sugarcoating, just lessons, laughter, and hustle.`,
 
-    "Opportunity Market": `You’re now in the community’s opportunity well. A trusted space to share job openings, gigs, and opportunities — giving our African family the first shot, and where possible, guiding with referrals and application tips.`
+    "Opportunity Market": `You’re now in the community’s opportunity well. A trusted space to share job openings, gigs, and opportunities — giving our African family the first shot, and where possible, guiding with referrals and application tips.`,
+
+    "Events & Vibes": `This is the village’s pulse, your space for sharing event details, concerts, conferences, and sports gist that keep the community alive. Keep it timely, keep it relevant, and and don’t let your people miss out on the action.`,
+
+    "Founders’ Hut": `Every big venture starts with a spark. This is your hut of builders, dreamers, and doers, a space to share business ideas, side hustles, and bold launches. Find collaborators, get feedback, and let the village help you grow what you’ve started.`
 };
 
 // ── Animated Card Component ───────────────────────────────────────
@@ -948,7 +956,7 @@ export default function ChatRoomsListScreen({ navigation, route }) {
     }, []);
 
     const openRoom = (item) => {
-        navigation.navigate('ChatRoomScreen', { chatroomId: item._id });
+        navigation.navigate('ChatRoomScreen', { chatroomId: item._id, chatroomName: item.name, });
     };
 
     const showRules = (item) => {
