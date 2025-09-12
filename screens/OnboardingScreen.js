@@ -139,7 +139,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   skipBtn: {
-    marginHorizontal: 12,
+    marginHorizontal: 20,
+    // marginBottom:40,
   },
   skipText: {
     fontSize: 16,
