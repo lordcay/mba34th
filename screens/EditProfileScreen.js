@@ -418,7 +418,7 @@ const EditProfileScreen = ({ navigation }) => {
       };
 
       const res = await axios.put(
-        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+        `http://192.168.0.169:4000/accounts/${userId}`,
         payload,
         {
           headers: {

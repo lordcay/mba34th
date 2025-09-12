@@ -30,7 +30,7 @@ const ChatScreen = () => {
 
   const fetchConversations = async () => {
     try {
-      const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+      const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(res.data);
@@ -80,7 +80,7 @@ const ChatScreen = () => {
   const getPhotoUri = (photo) => {
     if (!photo)
       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-    return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
+    return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
   };
 
   const formatSchoolFromEmail = (email) => {

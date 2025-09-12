@@ -39,7 +39,7 @@
 //                             user.photos && user.photos.length > 0
 //                                 ? user.photos[0].startsWith('http')
 //                                     ? user.photos[0]
-//                                     : `https://three4th-street-backend.onrender.com${user.photos[0]}`
+//                                     : `http://192.168.0.169:4000${user.photos[0]}`
 //                                 : 'https://via.placeholder.com/150',
 //                     }}
 //                     style={styles.profilePic}
@@ -66,7 +66,7 @@
 //                             <View style={{ alignItems: 'center', marginRight: 12 }}>
 //                                 <Image
 //                                     source={{
-//                                         uri: item.startsWith('http') ? item : `https://three4th-street-backend.onrender.com${item}`,
+//                                         uri: item.startsWith('http') ? item : `http://192.168.0.169:4000${item}`,
 //                                     }}
 //                                     style={styles.galleryImage}
 //                                 />
@@ -283,7 +283,7 @@ import moment from 'moment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const BASE_URL = 'http://192.168.0.169:4000';
 
 const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 

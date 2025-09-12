@@ -106,7 +106,7 @@
 //                     source={{
 //                       uri: photo.startsWith('http')
 //                         ? photo
-//                         : `https://three4th-street-backend.onrender.com${photo}`,
+//                         : `http://192.168.0.169:4000${photo}`,
 //                     }}
 //                     style={styles.image}
 //                     resizeMode="cover"
@@ -457,7 +457,7 @@ const UserCard = ({ u, navigation }) => {
 
   const renderSlide = ({ item: photo }) => {
     const uri = photo
-      ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+      ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
       : null;
 
     return (

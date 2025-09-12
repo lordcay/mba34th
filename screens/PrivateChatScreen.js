@@ -92,7 +92,7 @@ const PrivateChatScreen = () => {
 
   const fetchMessages = async () => {
     try {
-      const res = await axios.get(`https://three4th-street-backend.onrender.com/messages/${user.id}`, {
+      const res = await axios.get(`http://192.168.0.169:4000/messages/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(res.data.reverse()); // show most recent at bottom
@@ -114,7 +114,7 @@ const PrivateChatScreen = () => {
     };
 
     try {
-      const res = await axios.post('https://three4th-street-backend.onrender.com/messages', newMessage, {
+      const res = await axios.post('http://192.168.0.169:4000/messages', newMessage, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages([res.data, ...messages]); // add new message
@@ -162,7 +162,7 @@ const PrivateChatScreen = () => {
               uri:
                 user?.photos?.[0]?.startsWith('http')
                   ? user.photos[0]
-                  : `https://three4th-street-backend.onrender.com${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+                  : `http://192.168.0.169:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
             }}
             style={styles.profileImage}
           />

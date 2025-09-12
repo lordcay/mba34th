@@ -61,7 +61,7 @@ const PreFinalScreen = () => {
         bio: userData.bio || '',
         interests: userData.interests || [],
       };
-      const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
+      const res = await axios.post('http://192.168.0.169:4000/accounts/register', payload);
       const { userId } = res.data;
       navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
       clearAllScreenData();

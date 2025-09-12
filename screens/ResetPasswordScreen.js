@@ -41,7 +41,7 @@ const ResetPasswordScreen = ({ navigation }) => {
             setLoading(true);
 
             const response = await axios.post(
-                'https://three4th-street-backend.onrender.com/accounts/reset-password', // 👈 Replace with your actual base URL
+                'http://192.168.0.169:4000/accounts/reset-password', // 👈 Replace with your actual base URL
                 {
                     token,
                     password,

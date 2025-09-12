@@ -25,7 +25,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
         try {
             setLoading(true);
-            const response = await axios.post('https://three4th-street-backend.onrender.com/accounts/forgot-password', {
+            const response = await axios.post('http://192.168.0.169:4000/accounts/forgot-password', {
                 email,
             });
 

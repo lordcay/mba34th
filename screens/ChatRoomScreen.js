@@ -18,7 +18,7 @@ import api from '../services/api';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const BASE_URL = 'http://192.168.0.169:4000';
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 

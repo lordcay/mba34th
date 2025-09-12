@@ -13,7 +13,7 @@
 // import axios from 'axios';
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms'; // replace with your backend URL
+// const API_URL = 'http://192.168.0.169:4000/chatrooms'; // replace with your backend URL
 
 // export default function ChatRoomsListScreen({ navigation }) {
 //     const [chatrooms, setChatrooms] = useState([]);
@@ -117,7 +117,7 @@
 // import AsyncStorage from '@react-native-async-storage/async-storage';
 // import { Ionicons } from '@expo/vector-icons';
 
-// const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
+// const API_URL = 'http://192.168.0.169:4000/chatrooms';
 
 // export default function ChatRoomsListScreen({ navigation }) {
 //     const [chatrooms, setChatrooms] = useState([]);
@@ -326,7 +326,7 @@
 // import { Ionicons } from '@expo/vector-icons';
 // import { BlurView } from 'expo-blur';
 
-// const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
+// const API_URL = 'http://192.168.0.169:4000/chatrooms';
 
 // export default function ChatRoomsListScreen({ navigation }) {
 //     const [chatrooms, setChatrooms] = useState([]);
@@ -535,7 +535,7 @@
 // import { BlurView } from 'expo-blur';
 // import Animated, { FadeInUp, FadeOut } from 'react-native-reanimated';
 
-// const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
+// const API_URL = 'http://192.168.0.169:4000/chatrooms';
 
 // // Image mapping for each chatroom
 // const chatroomImages = {
@@ -760,7 +760,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 
 // ── API ────────────────────────────────────────────────────────────
-const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
+const API_URL = 'http://192.168.0.169:4000/chatrooms';
 
 // ── Local Images (make sure these files exist in /assets) ─────────
 import IMG_VILLAGE from '../assets/2.jpg';

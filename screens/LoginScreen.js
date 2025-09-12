@@ -48,7 +48,7 @@ const LoginScreen = () => {
 
     try {
       const response = await axios.post(
-        'https://three4th-street-backend.onrender.com/accounts/authenticate',
+        'http://192.168.0.169:4000/accounts/authenticate',
         { email: email.trim(), password: password.trim() }
       );
       const { token, id } = response.data;
