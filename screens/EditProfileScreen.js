@@ -1044,6 +1044,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 10,
     marginTop: 20,
+    marginBottom:80,
     alignItems: 'center'
   },
   saveButtonText: {
