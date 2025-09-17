@@ -203,8 +203,8 @@ const ProfileScreen = () => {
           }
         />
         {/* <InfoRow label="University" value={school} /> */}
-        <InfoRow label="Program of Study" value={user.fieldOfStudy} />
-        <InfoRow label="Field of Study" value={user.type} />
+        <InfoRow label=" Field of Study" value={user.fieldOfStudy} />
+        <InfoRow label=" Program of Study" value={user.type} />
         <InfoRow label="Graduation Year" value={user.graduationYear} />
       </View>
 

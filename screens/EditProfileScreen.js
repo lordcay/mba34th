@@ -709,7 +709,7 @@ const EditProfileScreen = ({ navigation }) => {
 
 
 
-      <Text style={styles.label}>program of Study <Text style={styles.required}>*</Text></Text>
+      <Text style={styles.label}>Field of Study <Text style={styles.required}>*</Text></Text>
       <TextInput
         style={styles.input}
         value={fieldOfStudy}

@@ -518,7 +518,7 @@ const UserCard = ({ u, navigation }) => {
         {!!u.fieldOfStudy && (
           <>
             <Text style={styles.sectionTitle}>Current / Previous Role</Text>
-            <Text style={styles.sectionText}>{u.fieldOfStudy}</Text>
+            <Text style={styles.sectionText}>{u.currentRole}</Text>
           </>
         )}
 

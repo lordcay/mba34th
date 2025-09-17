@@ -28,6 +28,8 @@ import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/
 import UserProfileScreen from '../screens/UserProfileScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
+import { navigationRef } from './RootNavigation';
+
 
 
 const Stack = createNativeStackNavigator();
@@ -97,65 +99,7 @@ const AppNavigator = () => {
 };
 
 
-// const AppNavigator = () => {
-//   const { user, isLoading } = useContext(AuthContext);
 
-//   if (isLoading) {
-//     return (
-//       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-//         <ActivityIndicator size="large" />
-//       </View>
-//     );
-//   }
-
-//   return (
-//     <NavigationContainer>
-//       <Stack.Navigator
-//         screenOptions={{
-//           headerShown: false,
-//           gestureEnabled: true,
-//           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS, // iOS-style slide-in
-//           transitionSpec: {
-//             open: { animation: 'timing', config: { duration: 500 } },
-//             close: { animation: 'timing', config: { duration: 400 } },
-//           },
-//         }}
-//       >
-//         {user ? (
-//           // ✅ Authenticated → Go to full app
-//           <>
-//             <Stack.Screen name="Home" component={TabNavigator} />
-//             <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-
-//             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-//             <Stack.Screen name="Profile" component={ProfileScreen} />
-//             <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
-//           </>
-//         ) : (
-//           // ✅ Not authenticated → Show auth flow
-//           <>
-//             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-//             <Stack.Screen name="Login" component={LoginScreen} />
-//             <Stack.Screen name="Register" component={RegisterScreen} />
-//             <Stack.Screen name="ForgotPasswordScreen" component={ForgotPasswordScreen} />
-//             <Stack.Screen name="ResetPasswordScreen" component={ResetPasswordScreen} />
-//             <Stack.Screen name="NameScreen" component={NameScreen} />
-//             <Stack.Screen name="EmailScreen" component={EmailScreen} />
-//             <Stack.Screen name="PasswordScreen" component={PasswordScreen} />
-//             <Stack.Screen name="GenderScreen" component={GenderScreen} />
-//             <Stack.Screen name="Location" component={LocationScreen} />
-//             <Stack.Screen name="Type" component={TypeScreen} />
-//             <Stack.Screen name="ProfileInfo" component={ProfileInfoScreen} />
-//             <Stack.Screen name="PhotoUploadScreen" component={PhotoUploadScreen} />
-//             <Stack.Screen name="PreFinal" component={PreFinalScreen} />
-//             <Stack.Screen name="VerifyOTPScreen" component={VerifyOTPScreen} />
-//           </>
-//         )}
-//       </Stack.Navigator>
-//       <Toast />
-//     </NavigationContainer>
-//   );
-// };
 
 export default AppNavigator;
 
