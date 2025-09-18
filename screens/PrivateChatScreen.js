@@ -29,6 +29,8 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { showTopToast, playPing } from '../utils/notify';
+import { useUnread } from '../context/UnreadContext';
+
 
 
 const HEADER_HEIGHT = 56;
@@ -53,9 +55,24 @@ const PrivateChatScreen = () => {
   const [typingStatus, setTypingStatus] = useState('');
   const typingTimeoutRef = useRef(null);
   const lastTypedAtRef = useRef(0);
+  const { dispatch } = useUnread();
+
+
+  
 
   // my display name for typing events
   const [myDisplayName, setMyDisplayName] = useState('Someone');
+
+  const asId = (val) => {
+  if (!val) return null;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    if (val._id) return String(val._id);
+    if (val.id)  return String(val.id);
+  }
+  return String(val);
+};
+
   useEffect(() => {
     (async () => {
       try {
@@ -118,24 +135,31 @@ const PrivateChatScreen = () => {
 
     socket.emit('dm:join', { meId: userId, otherUserId: user.id });
     socket.emit('readMessages', { readerId: userId, senderId: user.id });
+    // 🔔 clear local unread & badge for this DM
+  dispatch({ type: 'clear-dm', otherUserId: user.id });
 
     // Normalize both possible server payloads:
     // - room-based emit: socket.emit('message:new', msg)
     // - legacy direct emit: io.to(socketId).emit('newMessage', { message: created, sender: {...} })
+
 const onNew = (payload) => {
   const msg = payload?.message || payload;
   if (!msg) return;
 
+  const sId = asId(msg.senderId);
+  const rId = asId(msg.recipientId);
+  const meId = String(userId);
+  const otherId = String(user.id);
+
   // only process messages for THIS 1:1 thread
   const isThisThread =
-    (String(msg.senderId) === String(userId) && String(msg.recipientId) === String(user.id)) ||
-    (String(msg.senderId) === String(user.id) && String(msg.recipientId) === String(userId));
+    (sId === meId && rId === otherId) ||
+    (sId === otherId && rId === meId);
   if (!isThisThread) return;
 
   // --- In-app toast + sound for INCOMING messages (other -> me)
-  const isIncoming = String(msg.senderId) === String(user.id) && String(msg.recipientId) === String(userId);
+  const isIncoming = sId === otherId && rId === meId;
   if (isIncoming) {
-    // Try to resolve the sender's display name from several possible fields
     const senderName =
       payload?.senderName ||
       (payload?.sender
@@ -144,10 +168,7 @@ const onNew = (payload) => {
       [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
       'Someone';
 
-    // Short preview (avoid very long toasts)
     const preview = (msg.message || '').toString().slice(0, 100);
-
-    // 🔊 play a ping + show a top toast
     try { playPing(); } catch {}
     try { showTopToast(`New message from ${senderName}`, preview); } catch {}
   }
@@ -156,14 +177,58 @@ const onNew = (payload) => {
   setMessages((prev) => {
     const exists = prev.some((m) => String(m._id || '') === String(msg._id || ''));
     if (exists) return prev;
-    return [msg, ...prev]; // inverted: newest first
+    return [msg, ...prev]; // inverted: newest first (FlatList is inverted)
   });
 
   // Mark read immediately for incoming messages
   if (isIncoming) {
-    socket.emit('readMessages', { readerId: userId, senderId: user.id });
+    socket.emit('readMessages', { readerId: meId, senderId: otherId });
   }
 };
+
+
+// const onNew = (payload) => {
+//   const msg = payload?.message || payload;
+//   if (!msg) return;
+
+//   // only process messages for THIS 1:1 thread
+//   const isThisThread =
+//     (String(msg.senderId) === String(userId) && String(msg.recipientId) === String(user.id)) ||
+//     (String(msg.senderId) === String(user.id) && String(msg.recipientId) === String(userId));
+//   if (!isThisThread) return;
+
+//   // --- In-app toast + sound for INCOMING messages (other -> me)
+//   const isIncoming = String(msg.senderId) === String(user.id) && String(msg.recipientId) === String(userId);
+//   if (isIncoming) {
+//     // Try to resolve the sender's display name from several possible fields
+//     const senderName =
+//       payload?.senderName ||
+//       (payload?.sender
+//         ? [payload.sender.firstName, payload.sender.lastName].filter(Boolean).join(' ').trim()
+//         : null) ||
+//       [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim() ||
+//       'Someone';
+
+//     // Short preview (avoid very long toasts)
+//     const preview = (msg.message || '').toString().slice(0, 100);
+
+//     // 🔊 play a ping + show a top toast
+//     try { playPing(); } catch {}
+//     try { showTopToast(`New message from ${senderName}`, preview); } catch {}
+//   }
+
+//   // Deduplicate before adding
+//   setMessages((prev) => {
+//     const exists = prev.some((m) => String(m._id || '') === String(msg._id || ''));
+//     if (exists) return prev;
+//     return [msg, ...prev]; // inverted: newest first
+//   });
+
+//   // Mark read immediately for incoming messages
+//   if (isIncoming) {
+//     socket.emit('readMessages', { readerId: userId, senderId: user.id });
+//   }
+// };
 
 
     // const onNew = (payload) => {
@@ -294,7 +359,9 @@ const onNew = (payload) => {
   };
 
   const renderMessage = ({ item }) => {
-    const isMine = String(item.senderId) === String(userId);
+    // const isMine = String(item.senderId) === String(userId);
+    const isMine = asId(item.senderId) === String(userId);
+
     return (
       <View style={[styles.messageBubble, isMine ? styles.outgoing : styles.incoming]}>
         <Text style={styles.messageText}>{item.message}</Text>
@@ -340,7 +407,11 @@ const onNew = (payload) => {
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item, index) => String(item._id || index)}
+          keyExtractor={(item, index) =>
+  String(item._id || `${asId(item.senderId)}_${asId(item.recipientId)}_${item.timestamp || index}`)
+}
+
+          // keyExtractor={(item, index) => String(item._id || index)}
           contentContainerStyle={{ padding: 10, paddingBottom: 8 }}
           inverted
         />

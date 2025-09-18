@@ -82,6 +82,26 @@ import AppNavigator from './navigation/AppNavigator';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { socket } from './socket';
 import { showTopToast, playPing } from './utils/notify';
+import { UnreadProvider } from './context/UnreadContext';
+import { navigate } from './navigation/RootNavigation';
+import { useUnread } from './context/UnreadContext';
+
+
+
+
+function openFromPushData(data) {
+  if (!data) return;
+
+  if (data.kind === 'dm' && data.otherUserId) {
+    // Minimal route params (you can fetch full user later)
+    navigate('PrivateChat', { user: { id: data.otherUserId, firstName: data.senderName } });
+    return;
+  }
+
+  if (data.kind === 'group' && data.chatroomId) {
+    navigate('ChatRoom', { chatroomId: data.chatroomId, chatroomName: data.chatroomName || 'Group' });
+  }
+}
 
 // ---------- Notification handler (foreground behavior) ----------
 Notifications.setNotificationHandler({
@@ -123,6 +143,8 @@ const WithSocketListener = ({ children }) => {
   const { userId } = useContext(AuthContext);
   const appState = useRef(AppState.currentState);
   const [ready, setReady] = useState(false);
+  const { dispatch } = useUnread();
+
 
   // keep an Audio.Sound preloaded (optional; playPing in utils already works too)
   const pingRef = useRef(null);
@@ -157,6 +179,27 @@ const WithSocketListener = ({ children }) => {
     };
   }, []);
 
+
+  useEffect(() => {
+  // 1) User taps a notification while app is foreground/background
+  const subResponse = Notifications.addNotificationResponseReceivedListener(resp => {
+    try { openFromPushData(resp?.notification?.request?.content?.data); } catch {}
+  });
+
+  // 2) Notification received while app is foreground (optional toast/sound duplication guard)
+  const subReceive = Notifications.addNotificationReceivedListener(notif => {
+    // You can optionally play a sound or ignore because your socket already handled it.
+    // If you want to unify behavior:
+    // const data = notif?.request?.content?.data; openFromPushData(data); // (only navigate on tap usually)
+  });
+
+  return () => {
+    subResponse.remove();
+    subReceive.remove();
+  };
+}, []);
+
+
   // Register the socket with your userId whenever it’s available / reconnects
   useEffect(() => {
     if (!userId) return;
@@ -184,25 +227,32 @@ const WithSocketListener = ({ children }) => {
   const msg = payload?.message || payload;
   if (!msg) return;
 
-  // 🧠 figure out the sender
-  const senderIdFromMsg = msg.senderId;                 // room emit shape
-  const senderIdFromWrapper = payload?.sender?.id;      // legacy direct emit shape
+  const senderIdFromMsg = msg.senderId;
+  const senderIdFromWrapper = payload?.sender?.id || payload?.meta?.senderId;
   const actualSenderId = senderIdFromMsg ?? senderIdFromWrapper;
 
-  // 🚫 if it's me, ignore (don't toast or ping)
+  // 🚫 Do not notify myself
   if (String(actualSenderId) === String(userId)) return;
 
   const senderName =
     payload?.sender?.firstName ||
-    payload?.senderName ||
+    payload?.meta?.senderName ||
     msg?.senderName ||
     'Someone';
 
-  const preview = (msg?.message || '').toString().slice(0, 80);
+  const otherUserId =
+    (msg.senderId && String(msg.senderId) !== String(userId)) ? msg.senderId : msg.recipientId;
 
+  const preview = (msg?.message || payload?.meta?.preview || '').toString().slice(0, 80);
+
+  // unread++
+  if (otherUserId) dispatch({ type: 'inc-dm', otherUserId });
+
+  // in-app toast + sound
   playPing();
   showTopToast(`New message from ${senderName}`, preview);
 
+  // if background, show push (local)
   if (AppState.currentState !== 'active') {
     scheduleMessageNotification({
       title: `New message from ${senderName}`,
@@ -210,6 +260,38 @@ const WithSocketListener = ({ children }) => {
     }).catch(() => {});
   }
 };
+
+
+//     const onDmNew = (payload) => {
+//   const msg = payload?.message || payload;
+//   if (!msg) return;
+
+//   // 🧠 figure out the sender
+//   const senderIdFromMsg = msg.senderId;                 // room emit shape
+//   const senderIdFromWrapper = payload?.sender?.id;      // legacy direct emit shape
+//   const actualSenderId = senderIdFromMsg ?? senderIdFromWrapper;
+
+//   // 🚫 if it's me, ignore (don't toast or ping)
+//   if (String(actualSenderId) === String(userId)) return;
+
+//   const senderName =
+//     payload?.sender?.firstName ||
+//     payload?.senderName ||
+//     msg?.senderName ||
+//     'Someone';
+
+//   const preview = (msg?.message || '').toString().slice(0, 80);
+
+//   playPing();
+//   showTopToast(`New message from ${senderName}`, preview);
+
+//   if (AppState.currentState !== 'active') {
+//     scheduleMessageNotification({
+//       title: `New message from ${senderName}`,
+//       body: preview,
+//     }).catch(() => {});
+//   }
+// };
 
     // const onDmNew = (payload) => {
     //   const msg = payload?.message || payload;
@@ -242,17 +324,44 @@ const WithSocketListener = ({ children }) => {
 
     // ----- Group message -----
 
-    const onGroupNew = (msg) => {
+//     const onGroupNew = (msg) => {
+//   if (!msg) return;
+
+//   // senderId can be:
+//   // - primitive id (msg.senderId)
+//   // - populated object (msg.senderId._id)
+//   const senderId =
+//     (msg.senderId && (msg.senderId._id || msg.senderId.id || msg.senderId)) || null;
+
+//   // 🚫 if it's my own message, ignore
+//   if (senderId && String(senderId) === String(userId)) return;
+
+//   const senderName =
+//     msg.senderName ||
+//     msg.sender?.firstName ||
+//     (msg.senderId && (msg.senderId.firstName || msg.senderId.name)) ||
+//     'Someone';
+
+//   const groupLabel = msg.chatroomName || 'Group chat';
+//   const preview = (msg.message || '').toString().slice(0, 80);
+
+//   playPing();
+//   showTopToast(`New message in ${groupLabel}`, `${senderName}: ${preview}`);
+
+//   if (AppState.currentState !== 'active') {
+//     scheduleMessageNotification({
+//       title: `New in ${groupLabel}`,
+//       body: `${senderName}: ${preview}`,
+//     }).catch(() => {});
+//   }
+// };
+
+const onGroupNew = (msg) => {
   if (!msg) return;
 
-  // senderId can be:
-  // - primitive id (msg.senderId)
-  // - populated object (msg.senderId._id)
   const senderId =
     (msg.senderId && (msg.senderId._id || msg.senderId.id || msg.senderId)) || null;
-
-  // 🚫 if it's my own message, ignore
-  if (senderId && String(senderId) === String(userId)) return;
+  if (senderId && String(senderId) === String(userId)) return; // 🚫 myself
 
   const senderName =
     msg.senderName ||
@@ -262,6 +371,9 @@ const WithSocketListener = ({ children }) => {
 
   const groupLabel = msg.chatroomName || 'Group chat';
   const preview = (msg.message || '').toString().slice(0, 80);
+
+  // unread++
+  if (msg.chatroomId) dispatch({ type: 'inc-group', chatroomId: msg.chatroomId });
 
   playPing();
   showTopToast(`New message in ${groupLabel}`, `${senderName}: ${preview}`);
@@ -274,27 +386,6 @@ const WithSocketListener = ({ children }) => {
   }
 };
 
-    // const onGroupNew = (msg) => {
-    //   if (!msg) return;
-    //   const senderName =
-    //     msg.senderName ||
-    //     msg.sender?.firstName ||
-    //     (msg.senderId && (msg.senderId.firstName || msg.senderId.name)) ||
-    //     'Someone';
-
-    //   const groupLabel = msg.chatroomName || 'Group chat';
-    //   const preview = (msg.message || '').toString().slice(0, 80);
-
-    //   playPing();
-    //   showTopToast(`New message in ${groupLabel}`, `${senderName}: ${preview}`);
-
-    //   if (!isForeground()) {
-    //     scheduleMessageNotification({
-    //       title: `New in ${groupLabel}`,
-    //       body: `${senderName}: ${preview}`,
-    //     }).catch(() => {});
-    //   }
-    // };
 
     socket.on('newChatroomMessage', onGroupNew);
 
@@ -378,10 +469,12 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <UnreadProvider>
       <WithSocketListener>
         <AppNavigator />
         <Toast />
       </WithSocketListener>
+      </UnreadProvider>
     </AuthProvider>
   );
 }

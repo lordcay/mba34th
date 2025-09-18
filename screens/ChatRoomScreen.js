@@ -18,6 +18,8 @@ import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { showTopToast, playPing } from '../utils/notify';
+import { useUnread } from '../context/UnreadContext';
+
 
 
 import {
@@ -37,6 +39,8 @@ export default function ChatRoomScreen({ route }) {
   const routeHook = useRoute();
   const navigation = useNavigation();
   const headerHeightFromNav = useHeaderHeight?.() || HEADER_HEIGHT_FALLBACK;
+  const { dispatch } = useUnread();
+
 
   const chatroomName =
     route?.params?.chatroomName ||
@@ -224,6 +228,8 @@ useEffect(() => {
 
     // ✅ join the correct server-side room
     socket.emit('joinChatroom', { chatroomId, userId: currentUserId || user?.id });
+    // 🔔 clear local unread & badge for this group
+  dispatch({ type: 'clear-group', chatroomId });
 
     // ✅ new messages from server
 // ✅ new messages from server

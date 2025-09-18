@@ -46,7 +46,8 @@ const AppNavigator = () => {
   }
 
   return (
-    <NavigationContainer>
+<NavigationContainer ref={navigationRef}>
+
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
