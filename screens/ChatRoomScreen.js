@@ -12,13 +12,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { socket } from '../socket';
 import axios from 'axios';
 import EmojiSelector from 'react-native-emoji-selector';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
+
+// import { useNavigation, useRoute } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { showTopToast, playPing } from '../utils/notify';
-import { useUnread } from '../context/UnreadContext';
+ import { useUnread } from '../context/UnreadContext';
 
 
 
@@ -39,7 +41,9 @@ export default function ChatRoomScreen({ route }) {
   const routeHook = useRoute();
   const navigation = useNavigation();
   const headerHeightFromNav = useHeaderHeight?.() || HEADER_HEIGHT_FALLBACK;
-  const { dispatch } = useUnread();
+   const { dispatch } = useUnread();
+  const isFocused = useIsFocused();
+
 
 
   const chatroomName =
@@ -122,6 +126,8 @@ useEffect(() => {
     const s2 = Keyboard.addListener(hideEvt, onHide);
     return () => { s1.remove(); s2.remove(); };
   }, []);
+
+
 
   // Minimal internal padding; safe area is applied by SASafeAreaView.
   const composerBottomPad = kbVisible
@@ -207,6 +213,13 @@ const lastTypedAtRef = useRef(0);
     } catch {}
   };
 
+//   useEffect(() => {
+//   if (!chatroomId) return;
+//   if (isFocused) {
+//     dispatch({ type: 'clear-room', roomId: String(chatroomId) });
+//   }
+// }, [isFocused, chatroomId, dispatch]);
+
   // Load current user id (backup to AuthContext)
   useEffect(() => {
     (async () => {
@@ -229,7 +242,8 @@ useEffect(() => {
     // ✅ join the correct server-side room
     socket.emit('joinChatroom', { chatroomId, userId: currentUserId || user?.id });
     // 🔔 clear local unread & badge for this group
-  dispatch({ type: 'clear-group', chatroomId });
+    // dispatch({ type: 'clear-room', roomId: String(chatroomId) });
+   dispatch({ type: 'clear-group', chatroomId });
 
     // ✅ new messages from server
 // ✅ new messages from server
