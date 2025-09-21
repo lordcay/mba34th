@@ -28,6 +28,9 @@ const ChatScreen = () => {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
 
+  // --- Tab filtering + search + sorting
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
   const fetchConversations = useCallback(async () => {
     try {
       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
@@ -205,12 +208,40 @@ const ChatScreen = () => {
     );
   };
 
+  const byTab = conversations.filter((c) => {
+  if (activeTab === 'Unread') {
+    return (c.unreadCount || 0) > 0;
+  }
+  if (activeTab === 'Recent') {
+    const t = c.timestamp ? new Date(c.timestamp).getTime() : 0;
+    return t > 0 && (Date.now() - t) <= RECENT_WINDOW_MS;
+  }
+  // 'All'
+  return true;
+});
+
+// Search on top of tab filter
+const bySearch = byTab.filter((c) => {
+  if (!search) return true;
+  const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
+  return hay.includes(search.toLowerCase());
+});
+
+// Sort (explicit for clarity)
+const finalList = bySearch.slice().sort((a, b) => {
+  const ta = new Date(a.timestamp || 0).getTime();
+  const tb = new Date(b.timestamp || 0).getTime();
+  // Newest first for Unread & Recent; All is already in that order but keep consistent
+  return tb - ta;
+});
+
   // const [search, setSearch] = useState(''); // (kept above originally)
-  const filtered = conversations.filter(c => {
-    if (!search) return true;
-    const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
-    return hay.includes(search.toLowerCase());
-  });
+
+  // const filtered = conversations.filter(c => {
+  //   if (!search) return true;
+  //   const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
+  //   return hay.includes(search.toLowerCase());
+  // });
 
   return (
     <View style={styles.container}>
@@ -247,7 +278,7 @@ const ChatScreen = () => {
       </View>
 
       <FlatList
-        data={filtered}
+        data={finalList}
         keyExtractor={item => String(item.userId || item._id)}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 30 }}

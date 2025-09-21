@@ -43,6 +43,8 @@ const TabNavigator = () => {
   // const totalUnread = state?.total || 0;
   //  const { unreadCount } = useContext(AuthContext);
   const totalUnread = state?.total || 0;
+   const roomUnread  = Object.values(state?.roomById || {}).reduce((a, b) => a + b, 0);
+
   const { unreadCount } = useContext(AuthContext); // ← from ChatScreen publish
 
     // Pick the most reliable number available at any moment
@@ -98,18 +100,26 @@ const TabNavigator = () => {
           else if (route.name === 'ChatRooms') iconName = 'chatbubbles';
           else if (route.name === 'Profile') iconName = 'person';
 
-          // Only badge the Chat tab
-          if (route.name !== 'Chat') {
-            return <Ionicons name={iconName} size={size} color={color} />;
-          }
-          const displayCount = effectiveUnread > 99 ? '99+' : effectiveUnread;
+          // // Only badge the Chat tab
+          // if (route.name !== 'Chat') {
+          //   return <Ionicons name={iconName} size={size} color={color} />;
+          // }
+
+           // Badge logic per tab
+         const isChatTab      = route.name === 'Chat';
+         const isChatRoomsTab = route.name === 'ChatRooms';
+         const count = isChatTab ? effectiveUnread
+                      : isChatRoomsTab ? roomUnread
+                      : 0;
+         const display = count > 99 ? '99+' : count;
+          // const displayCount = effectiveUnread > 99 ? '99+' : effectiveUnread;
 
           // const displayCount = totalUnread > 99 ? '99+' : totalUnread;
 
           return (
             <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
               <Ionicons name={iconName} size={size} color={color} />
-              {effectiveUnread > 0 && (
+              {count > 0 && (
                 <View
                   style={{
                     position: 'absolute',
@@ -127,7 +137,7 @@ const TabNavigator = () => {
                   <Text
                     style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}
                   >
-                    {displayCount}
+                    {display}
                   </Text>
                 </View>
               )}
@@ -153,9 +163,8 @@ const TabNavigator = () => {
 
 export default TabNavigator;
 
-
 // // navigation/TabNavigator.js
-// import React, { useContext, useEffect, useRef, useState } from 'react';
+// import React, { useEffect, useRef, useState, useContext } from 'react';
 // import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 // import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -167,9 +176,11 @@ export default TabNavigator;
 // import ChatRoomScreen from '../screens/ChatRoomScreen';
 
 // import { Ionicons } from '@expo/vector-icons';
-// import { AuthContext } from '../context/AuthContext';
 // import { View, Text, Animated } from 'react-native';
 // import { Audio } from 'expo-av';
+// import { useUnread } from '../context/UnreadContext';
+// import { AuthContext } from '../context/AuthContext';
+
 
 // const Tab = createBottomTabNavigator();
 // const Stack = createNativeStackNavigator();
@@ -192,9 +203,23 @@ export default TabNavigator;
 // }
 
 // const TabNavigator = () => {
-//   const { unreadCount } = useContext(AuthContext);
+//   // 🔔 Use global unread totals from UnreadContext
+//   const { state } = useUnread(); // { total, dmByUserId, roomById }
+//   // const totalUnread = state?.total || 0;
+//   //  const { unreadCount } = useContext(AuthContext);
+//   const totalUnread = state?.total || 0;
+//   const { unreadCount } = useContext(AuthContext); // ← from ChatScreen publish
+
+//     // Pick the most reliable number available at any moment
+//   const effectiveUnread = Math.max(Number(unreadCount || 0), Number(totalUnread || 0));
+
+
+//   // bounce + sound
 //   const bounceAnim = useRef(new Animated.Value(1)).current;
 //   const [sound, setSound] = useState();
+//    const prevTotalRef = useRef(effectiveUnread);
+
+//   // const prevTotalRef = useRef(totalUnread);
 
 //   const playNotificationSound = async () => {
 //     try {
@@ -209,22 +234,24 @@ export default TabNavigator;
 //   };
 
 //   useEffect(() => {
-//     if (unreadCount > 0) {
+//     // Only animate/ping when the total goes UP
+//     if (effectiveUnread > (prevTotalRef.current || 0)) {
 //       Animated.sequence([
 //         Animated.timing(bounceAnim, {
 //           toValue: 1.2,
-//           duration: 200,
+//           duration: 180,
 //           useNativeDriver: true,
 //         }),
 //         Animated.timing(bounceAnim, {
 //           toValue: 1,
-//           duration: 200,
+//           duration: 180,
 //           useNativeDriver: true,
 //         }),
 //       ]).start();
 //       playNotificationSound();
 //     }
-//   }, [unreadCount]);
+//      prevTotalRef.current = effectiveUnread;
+//   }, [effectiveUnread]);
 
 //   return (
 //     <Tab.Navigator
@@ -236,16 +263,24 @@ export default TabNavigator;
 //           else if (route.name === 'ChatRooms') iconName = 'chatbubbles';
 //           else if (route.name === 'Profile') iconName = 'person';
 
+//           // Only badge the Chat tab
+//           if (route.name !== 'Chat') {
+//             return <Ionicons name={iconName} size={size} color={color} />;
+//           }
+//           const displayCount = effectiveUnread > 99 ? '99+' : effectiveUnread;
+
+//           // const displayCount = totalUnread > 99 ? '99+' : totalUnread;
+
 //           return (
-//             <View>
+//             <Animated.View style={{ transform: [{ scale: bounceAnim }] }}>
 //               <Ionicons name={iconName} size={size} color={color} />
-//               {route.name === 'Chat' && unreadCount > 0 && (
+//               {effectiveUnread > 0 && (
 //                 <View
 //                   style={{
 //                     position: 'absolute',
 //                     top: -4,
 //                     right: -6,
-//                     backgroundColor: '#ff3b30',
+//                     backgroundColor: '#581845',
 //                     borderRadius: 10,
 //                     paddingHorizontal: 5,
 //                     minWidth: 16,
@@ -257,11 +292,11 @@ export default TabNavigator;
 //                   <Text
 //                     style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}
 //                   >
-//                     {unreadCount > 9 ? '9+' : unreadCount}
+//                     {displayCount}
 //                   </Text>
 //                 </View>
 //               )}
-//             </View>
+//             </Animated.View>
 //           );
 //         },
 //         tabBarActiveTintColor: '#581845',
@@ -282,3 +317,4 @@ export default TabNavigator;
 // };
 
 // export default TabNavigator;
+

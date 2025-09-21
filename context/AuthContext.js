@@ -1,18 +1,12 @@
-
-
-
 import { createContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { socket } from '../socket';
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
-import { registerForPushNotificationsAsync } from '../hooks/usePushNotifications';
 import * as Notifications from 'expo-notifications';
 import { checkProfileCompletion } from '../utils/checkProfileCompletion';
-
-// import * as Permissions from 'expo-permissions';
-// 
+import { useUnread } from '../context/UnreadContext';
 
 const AuthContext = createContext();
 
@@ -23,6 +17,10 @@ const AuthProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // ✅ Properly use UnreadContext
+  const unreadCtx = useUnread();                 // may be null if not wrapped
+  const unreadState = unreadCtx?.state ?? null;  // null-safe
+  const unreadDispatch = unreadCtx?.dispatch;    // null-safe
 
   const login = async (token, userId) => {
     try {
@@ -93,80 +91,97 @@ const AuthProvider = ({ children }) => {
     isLoggedIn();
   }, []);
 
+  // Normalize id values that might be strings or populated objects
+  const asId = (val) => {
+    if (!val) return null;
+    if (typeof val === 'string') return val;
+    if (typeof val === 'object') return String(val._id || val.id || '');
+    return String(val);
+  };
+
   useEffect(() => {
     if (!user?._id) return;
 
-     // Hook into UnreadContext
- const { dispatch } = require('../context/UnreadContext').useUnread?.() || {};
- if (!dispatch) return;
-
-    // 1️⃣ Register for Socket.IO
+    // 1) Register my socket id
     socket.emit('register', user._id);
 
-     // DM list bumps: conversation:update
- const onConvUpdate = (p) => {
-   if (!p) return;
-   const me = String(user._id);
-   const { peerA, peerB, unreadBumpFor, unreadResetFor } = p;
-   const otherId = String(peerA) === me ? String(peerB) : String(peerA);
-   if (unreadBumpFor && String(unreadBumpFor) === me) {
-     dispatch({ type: 'bump-dm', otherUserId: otherId });
-   }
-   if (unreadResetFor && String(unreadResetFor) === me) {
-     dispatch({ type: 'reset-dm', otherUserId: otherId });
-   }
- };
-
-  // The server also emits explicit read events
- const onMessageRead = ({ readerId, otherId }) => {
-   if (String(readerId) === String(user._id)) {
-     dispatch({ type: 'reset-dm', otherUserId: String(otherId) });
-   }
- };
-
-
-  socket.on('conversation:update', onConvUpdate);
- socket.on('message:read', onMessageRead);
-  return () => {
-   socket.off('conversation:update', onConvUpdate);
-   socket.off('message:read', onMessageRead);
-  };
-    // 2️⃣ Register for push notifications
-    const registerForPushNotificationsAsync = async () => {
-      let token;
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('default', {
-          name: 'default',
-          importance: Notifications.AndroidImportance.MAX,
-        });
+    // --- DM list bumps: conversation:update
+    const onConvUpdate = (p) => {
+      if (!p || !unreadDispatch) return;
+      const me = String(user._id);
+      const { peerA, peerB, unreadBumpFor, unreadResetFor } = p;
+      const otherId = String(peerA) === me ? String(peerB) : String(peerA);
+      if (unreadBumpFor && String(unreadBumpFor) === me) {
+        unreadDispatch({ type: 'bump-dm', otherUserId: otherId });
       }
-
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== 'granted') {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
+      if (unreadResetFor && String(unreadResetFor) === me) {
+        unreadDispatch({ type: 'reset-dm', otherUserId: otherId });
       }
-
-      if (finalStatus !== 'granted') {
-        console.warn('🚫 Push notification permission denied');
-        return;
-      }
-
-      token = (await Notifications.getExpoPushTokenAsync()).data;
-      console.log('✅ Expo Push Token:', token);
-
-      // 👉 Optionally: Save this token to your backend linked to user._id
     };
 
-    registerForPushNotificationsAsync();
+    // explicit read events
+    const onMessageRead = ({ readerId, otherId }) => {
+      if (!unreadDispatch) return;
+      if (String(readerId) === String(user._id)) {
+        unreadDispatch({ type: 'reset-dm', otherUserId: String(otherId) });
+      }
+    };
 
-    // 3️⃣ Handle new messages
+    // --- Chatroom bumps: newChatroomMessage
+    const onRoomMessage = (payload) => {
+  try {
+    if (!unreadDispatch) return;
+    const me = asId(user._id);
+    const roomId = asId(payload?.chatroomId || payload?.chatroom?._id);
+    const sender = asId(payload?.senderId);
+    if (!roomId) return;
+    if (sender && me && sender === me) return; // my own message → no bump
+    const active = String(unreadState?.activeRoomId || '');
+    if (active && String(active) === String(roomId)) return; // reading this room → no bump
+    unreadDispatch({ type: 'bump-room', roomId: String(roomId) });
+  } catch {}
+};
+
+ // --- Chatroom global notify (works when you're *not* in the room)
+ const onRoomNotify = ({ chatroomId, senderId }) => {
+   try {
+     if (!unreadDispatch) return;
+     if (!chatroomId) return;
+     const me = asId(user._id);
+     if (me && senderId && String(me) === String(senderId)) return; // ignore my own
+     const active = String(unreadState?.activeRoomId || '');
+     if (active && String(active) === String(chatroomId)) return;   // actively viewing → no bump
+     unreadDispatch({ type: 'bump-room', roomId: String(chatroomId) });
+   } catch {}
+ };
+
+    // --- Push registration (kept as-is)
+    const doPushSetup = async () => {
+      try {
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+          });
+        }
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus === 'granted') {
+          const token = (await Notifications.getExpoPushTokenAsync()).data;
+          console.log('✅ Expo Push Token:', token);
+        }
+      } catch (e) {
+        console.warn('Push setup failed', e);
+      }
+    };
+    doPushSetup();
+
+    // --- Legacy direct DM toast/sound (kept)
     const handleNewMessage = async ({ message, sender }) => {
-      console.log('📥 New message received:', message);
-
-      // Local toast
       Toast.show({
         type: 'success',
         text1: `New message from ${sender.firstName}`,
@@ -174,34 +189,35 @@ const AuthProvider = ({ children }) => {
         position: 'top',
         visibilityTime: 3000,
       });
-
-      // Local sound
       try {
         const { sound } = await Audio.Sound.createAsync(
           require('../assets/notification.mp3')
         );
         await sound.playAsync();
-      } catch (err) {
-        console.warn('🔇 Failed to play notification sound', err);
-      }
-
-      // Local push notification
+      } catch {}
       await Notifications.scheduleNotificationAsync({
-        content: {
-          title: `Message from ${sender.firstName}`,
-          body: message,
-        },
-        trigger: null, // Deliver immediately
+        content: { title: `Message from ${sender.firstName}`, body: message },
+        trigger: null,
       });
     };
 
+    // Wire listeners
+    socket.on('conversation:update', onConvUpdate);
+    socket.on('message:read', onMessageRead);
+    socket.on('newChatroomMessage', onRoomMessage);
     socket.on('newMessage', handleNewMessage);
+    socket.on('chatroom:notify', onRoomNotify);
 
+    // ✅ single cleanup return
     return () => {
+      socket.off('conversation:update', onConvUpdate);
+      socket.off('message:read', onMessageRead);
+      socket.off('newChatroomMessage', onRoomMessage);
+      socket.off('chatroom:notify', onRoomNotify);
       socket.off('newMessage', handleNewMessage);
     };
-  }, [user]);
-
+  // include unreadDispatch & activeRoomId so handler sees latest
+  }, [user, unreadDispatch, unreadState?.activeRoomId]);
 
   return (
     <AuthContext.Provider
@@ -225,8 +241,7 @@ const AuthProvider = ({ children }) => {
             console.error('❌ Failed to update user in context:', err);
           }
         },
-        checkProfileCompletion, // ✅ NEW: make it available!
-
+        checkProfileCompletion,
       }}
     >
       {children}
@@ -235,6 +250,7 @@ const AuthProvider = ({ children }) => {
 };
 
 export { AuthContext, AuthProvider };
+
 
 
 
