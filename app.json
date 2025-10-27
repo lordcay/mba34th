@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",

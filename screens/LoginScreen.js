@@ -48,7 +48,7 @@ const LoginScreen = () => {
 
     try {
       const response = await axios.post(
-        'http://192.168.0.169:4000/accounts/authenticate',
+        'https://three4th-street-backend.onrender.com/accounts/authenticate',
         { email: email.trim(), password: password.trim() }
       );
       const { token, id } = response.data;
@@ -113,7 +113,7 @@ const LoginScreen = () => {
               </View>
 
               <View style={styles.inputCard}>
-                <AntDesign name="lock1" size={22} color="#581845" />
+                <AntDesign name="lock" size={22} color="#581845" />
                 <TextInput
                   placeholder="Password"
                   placeholderTextColor="#999"

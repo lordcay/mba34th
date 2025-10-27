@@ -1,6 +1,6 @@
 
 
-import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Linking } from 'react-native';
 import React, { useContext, useEffect, useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -9,12 +9,16 @@ import axios from 'axios';
 import jwtDecode from 'jwt-decode';
 import { AuthContext } from '../context/AuthContext';
 import { getRegistrationProgress } from '../registrationUtils';
+// import CheckBox from '@react-native-community/checkbox'; // run: expo install @react-native-community/checkbox
+import Checkbox from 'expo-checkbox';
 
 const PreFinalScreen = () => {
   const navigation = useNavigation();
   const { token, setToken } = useContext(AuthContext);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(false);
+    const [agree, setAgree] = useState(false);
+
 
   useEffect(() => {
     const loadToken = async () => {
@@ -47,6 +51,11 @@ const PreFinalScreen = () => {
   };
 
   const registerUser = async () => {
+    if (!agree) {
+      alert('Please agree to the Terms & Privacy Policy before joining.');
+      return;
+    }
+
     setLoading(true);
     try {
       if (!userData?.email) return;
@@ -61,7 +70,7 @@ const PreFinalScreen = () => {
         bio: userData.bio || '',
         interests: userData.interests || [],
       };
-      const res = await axios.post('http://192.168.0.169:4000/accounts/register', payload);
+      const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
       const { userId } = res.data;
       navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
       clearAllScreenData();
@@ -96,11 +105,37 @@ const PreFinalScreen = () => {
         />
         <Text style={styles.header}>You're All Set!</Text>
         <Text style={styles.subtext}>
-          Getting your profile set to meet your verified villager people.
+          Getting your profile set to meet your verified village people.
         </Text>
 
+{/* --- Policy Agreement Section --- */}
+        <View style={styles.checkboxContainer}>
+          <Checkbox
+            value={agree}
+            onValueChange={setAgree}
+            tintColors={{ true: '#581845', false: '#581845' }}
+          />
+          <Text style={styles.checkboxText}>
+            I agree to the{' '}
+            <Text
+              style={styles.link}
+              onPress={() => Linking.openURL('https://34thstreet.net')}>
+              Terms & Conditions
+            </Text>{' '}
+            and{' '}
+            <Text
+              style={styles.link}
+              onPress={() => Linking.openURL('https://34thstreet.net')}>
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+        </View>
 
-        <TouchableOpacity style={styles.btn} onPress={registerUser}>
+        <TouchableOpacity style={[styles.btn, { opacity: agree ? 1 : 0.5 }]}
+         onPress={registerUser} 
+         disabled={!agree}
+         >
           <Text style={styles.btnText}>Join 34th Street</Text>
         </TouchableOpacity>
       </View>
@@ -165,4 +200,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  checkboxContainer: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginTop: 25,
+  marginBottom: 10,
+  paddingHorizontal: 10,
+},
+
+checkboxText: {
+  flex: 1,
+  fontSize: 14,
+  color: '#333',
+  marginLeft: 8,
+  lineHeight: 20,
+},
+
+// 👇🏾 This one adds the "clickable link" look
+link: {
+  color: '#581845', // your brand color
+  fontWeight: '700',
+  textDecorationLine: 'underline',
+  textDecorationColor: '#581845',
+},
+
 });

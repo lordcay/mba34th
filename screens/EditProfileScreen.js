@@ -75,24 +75,12 @@ const EditProfileScreen = ({ navigation }) => {
   const [originSearch, setOriginSearch] = useState('');
 
 
-  // const toLocalYYYYMMDD = (dateObj) => {
-  //   const y = dateObj.getFullYear();
-  //   const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-  //   const d = String(dateObj.getDate()).padStart(2, '0');
-  //   return `${y}-${m}-${d}`;
-  // };
-
-  // const prettyDate = (val) => {
-  //   if (!val) return '';
-  //   const d = typeof val === 'string' ? new Date(val) : val;
-  //   // Localized nice string (e.g., January 12, 1995)
-  //   return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-  // };
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+const [confirmDeleteText, setConfirmDeleteText] = useState('');
+const [deleting, setDeleting] = useState(false);
 
 
-  // // --- DOB state
-  // const [showDobModal, setShowDobModal] = useState(false);   // iOS modal
-  // const [pendingDob, setPendingDob] = useState(null);        // temp selection for iOS
+
 
   // Keep these where your other helpers/states are
   const toLocalYYYYMMDD = (dateObj) => {
@@ -164,6 +152,46 @@ const EditProfileScreen = ({ navigation }) => {
   }, [user]);
 
 
+
+  // small util: full local sign-out + data wipe
+const hardSignOut = async () => {
+  try {
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('userId');
+  } catch {}
+  // if you store other keys, also clear them here
+  if (updateUser) updateUser(null);
+  navigation.reset({ index: 0, routes: [{ name: 'Auth' }] }); // or your login route
+};
+
+
+const handleDeleteAccount = async () => {
+  if (confirmDeleteText.trim().toUpperCase() !== 'DELETE') return;
+
+  try {
+    setDeleting(true);
+    const token = await AsyncStorage.getItem('token');
+    const userId = await AsyncStorage.getItem('userId');
+
+    // IMPORTANT: Your backend should perform irreversible deletion of the account
+    // and associated personal data (or queue it for deletion), then return 200.
+    await axios.delete(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      // If your backend supports soft vs hard deletes, pass a flag:
+      params: { hard: true }
+    });
+
+    setShowDeleteModal(false);
+    Alert.alert('Account deleted', 'Your account and personal data have been removed.');
+    await hardSignOut();
+  } catch (err) {
+    console.error('Delete account error:', err?.response || err?.message || err);
+    Alert.alert('Unable to delete', 'Please check your connection and try again.');
+  } finally {
+    setDeleting(false);
+    setConfirmDeleteText('');
+  }
+};
 
 
 
@@ -338,12 +366,7 @@ const EditProfileScreen = ({ navigation }) => {
     );
   };
 
-  // const handleDateChange = (event, selectedDate) => {
-  //   const currentDate = selectedDate || new Date(dob || Date.now());
-  //   setShowDatePicker(false);
-  //   const formattedDate = currentDate.toISOString().split('T')[0]; // "yyyy-mm-dd"
-  //   setDob(formattedDate);
-  // };
+
 
   const handleGraduationYearChange = (event, selectedDate) => {
     setShowGradYearPicker(false);
@@ -418,7 +441,7 @@ const EditProfileScreen = ({ navigation }) => {
       };
 
       const res = await axios.put(
-        `http://192.168.0.169:4000/accounts/${userId}`,
+        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -552,33 +575,6 @@ const EditProfileScreen = ({ navigation }) => {
       </Modal>
 
 
-      {/* {showOriginPicker && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {africanCountries.map((country, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.modalOption}
-                  onPress={() => {
-                    setOrigin(country);
-                    setShowOriginPicker(false);
-                  }}
-                >
-                  <Text style={styles.modalOptionText}>{country}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <TouchableOpacity
-              onPress={() => setShowOriginPicker(false)}
-              style={styles.modalCancel}
-            >
-              <Text style={styles.modalCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )} */}
-
       <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
       <TouchableOpacity
         style={styles.input}
@@ -678,27 +674,6 @@ const EditProfileScreen = ({ navigation }) => {
       </Modal>
 
 
-
-      {/* <Text style={styles.label}>Date of Birth <Text style={styles.required}>*</Text></Text>
-      <TouchableOpacity onPress={() => setShowDatePicker(true)} style={styles.input}>
-        <Text style={{ color: dob ? '#000' : '#999' }}>
-          {dob ? dob : 'Select your birth date'}
-        </Text>
-      </TouchableOpacity>
-
-      {showDatePicker && (
-        <DateTimePicker
-          value={dob ? new Date(dob) : new Date()}
-          mode="date"
-          display="default"
-          onChange={handleDateChange}
-          maximumDate={new Date()}
-        />
-      )} */}
-
-
-
-
       <Text style={styles.label}>Languages Spoken</Text>
       <TextInput
         style={styles.input}
@@ -750,7 +725,7 @@ const EditProfileScreen = ({ navigation }) => {
 
 
 
-      <Text style={styles.label}>Industry</Text>
+      <Text style={styles.label}>Industry <Text style={styles.required}>*</Text></Text>
       <TouchableOpacity
         style={styles.input}
         onPress={() => setShowIndustryPicker(true)}
@@ -759,6 +734,8 @@ const EditProfileScreen = ({ navigation }) => {
           {industry || 'Select your industry'}
         </Text>
       </TouchableOpacity>
+
+
       {showIndustryPicker && (
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -939,6 +916,81 @@ const EditProfileScreen = ({ navigation }) => {
       <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
       </TouchableOpacity>
+
+
+
+      {/* ===== Danger Zone ===== */}
+<View style={{ marginTop: 10, marginBottom:30, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eee' }}>
+  <Text style={{ fontSize: 16, fontWeight: '700', color: '#b00020', marginBottom: 8 }}>
+    Danger Zone
+  </Text>
+  <Text style={{ color: '#555', marginBottom: 12 }}>
+    Permanently delete your account and all associated data.
+  </Text>
+
+  <TouchableOpacity
+    onPress={() => setShowDeleteModal(true)}
+    style={{
+      backgroundColor: '#b00020',
+      paddingVertical: 14,
+      borderRadius: 10,
+      alignItems: 'center'
+    }}
+  >
+    <Text style={{ color: '#fff', fontWeight: '700' }}>Delete Account</Text>
+  </TouchableOpacity>
+</View>
+
+{/* Delete confirmation modal */}
+<Modal
+  isVisible={showDeleteModal}
+  onBackdropPress={() => !deleting && setShowDeleteModal(false)}
+  onBackButtonPress={() => !deleting && setShowDeleteModal(false)}
+  style={{ justifyContent: 'center', margin: 0 }}
+  useNativeDriver
+  useNativeDriverForBackdrop
+  backdropOpacity={0.35}
+>
+  <View style={{ backgroundColor:'#fff', marginHorizontal:20, borderRadius:12, padding:16 }}>
+    <Text style={{ fontSize:18, fontWeight:'700', marginBottom:6 }}>Delete Account?</Text>
+    <Text style={{ color:'#555' }}>
+      This action is permanent and cannot be undone. To confirm, type <Text style={{ fontWeight:'700' }}>DELETE</Text> below.
+    </Text>
+
+    <TextInput
+      style={[styles.input, { marginTop: 12 }]}
+      value={confirmDeleteText}
+      onChangeText={setConfirmDeleteText}
+      placeholder="Type DELETE to confirm"
+      autoCapitalize="characters"
+      autoCorrect={false}
+    />
+
+    <View style={{ flexDirection:'row', justifyContent:'flex-end', gap:10, marginTop:14 }}>
+      <TouchableOpacity
+        disabled={deleting}
+        onPress={() => setShowDeleteModal(false)}
+        style={{ paddingVertical:12, paddingHorizontal:16, borderRadius:8, backgroundColor:'#eee' }}
+      >
+        <Text style={{ fontWeight:'600', color:'#333' }}>Cancel</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        disabled={confirmDeleteText.trim().toUpperCase() !== 'DELETE' || deleting}
+        onPress={handleDeleteAccount}
+        style={{
+          paddingVertical:12, paddingHorizontal:16, borderRadius:8,
+          backgroundColor: (confirmDeleteText.trim().toUpperCase() === 'DELETE' ? '#b00020' : '#e9a8b1')
+        }}
+      >
+        <Text style={{ fontWeight:'700', color:'#fff' }}>
+          {deleting ? 'Deleting…' : 'Confirm'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+</Modal>
+
     </ScrollView>
   );
 };
@@ -1044,7 +1096,7 @@ const styles = StyleSheet.create({
     paddingVertical: 15,
     borderRadius: 10,
     marginTop: 20,
-    marginBottom:80,
+    // marginBottom:80,
     alignItems: 'center'
   },
   saveButtonText: {

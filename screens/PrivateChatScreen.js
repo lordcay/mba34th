@@ -325,7 +325,7 @@ const onNew = (payload) => {
 
   const fetchMessages = async () => {
     try {
-      const res = await axios.get(`http://192.168.0.169:4000/messages/${user.id}`, {
+      const res = await axios.get(`https://three4th-street-backend.onrender.com/messages/${user.id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(res.data.reverse());
@@ -339,7 +339,7 @@ const onNew = (payload) => {
     const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
     try {
-      const res = await axios.post('http://192.168.0.169:4000/messages', payload, {
+      const res = await axios.post('https://three4th-street-backend.onrender.com/messages', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -384,7 +384,7 @@ const onNew = (payload) => {
             source={{
               uri: user?.photos?.[0]?.startsWith('http')
                 ? user.photos[0]
-                : `http://192.168.0.169:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+                : `https://three4th-street-backend.onrender.com${user.photos?.[0]}` || 'https://via.placeholder.com/150',
             }}
             style={styles.profileImage}
           />
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.0.169:4000/messages/${user.id}`, {
+//       const res = await axios.get(`https://three4th-street-backend.onrender.com/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
 //   const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //   try {
-//     await axios.post('http://192.168.0.169:4000/messages', payload, {
+//     await axios.post('https://three4th-street-backend.onrender.com/messages', payload, {
 //       headers: { Authorization: `Bearer ${token}` }
 //     });
 //     // Do NOT push into state here—socket 'message:new' will arrive and add it once.
@@ -800,7 +800,7 @@ const styles = StyleSheet.create({
 //             source={{
 //               uri: user?.photos?.[0]?.startsWith('http')
 //                 ? user.photos[0]
-//                 : `http://192.168.0.169:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+//                 : `https://three4th-street-backend.onrender.com${user.photos?.[0]}` || 'https://via.placeholder.com/150',
 //             }}
 //             style={styles.profileImage}
 //           />

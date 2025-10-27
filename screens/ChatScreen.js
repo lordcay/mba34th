@@ -33,7 +33,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+      const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -150,7 +150,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
   const getPhotoUri = (photo) =>
     photo
-      ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
+      ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
 
   const formatSchoolFromEmail = (email) => {
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       // sort newest first (helps when socket updates arrive)
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
 //   const getPhotoUri = (photo) => {
 //     if (!photo)
 //       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-//     return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
+//     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
 //   };
 
 //   const formatSchoolFromEmail = (email) => {

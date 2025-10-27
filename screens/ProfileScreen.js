@@ -18,6 +18,8 @@ import moment from 'moment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { RefreshControl } from 'react-native';
+import { Linking } from 'react-native';
+
 
 
 
@@ -51,7 +53,7 @@ const ProfileScreen = () => {
       const userId = await AsyncStorage.getItem('userId');
 
       const res = await axios.put(
-        `http://192.168.0.169:4000/accounts/${userId}`,
+        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
         { photos: reordered },
         {
           headers: {
@@ -71,6 +73,35 @@ const ProfileScreen = () => {
   };
 
 
+  const openLinkedIn = () => {
+  const url = user.linkedIn?.trim();
+
+  if (!url) {
+    Alert.alert('No LinkedIn profile', 'You have not added a LinkedIn link yet.');
+    return;
+  }
+
+  let finalUrl = url;
+  if (!/^https?:\/\//i.test(url)) {
+    finalUrl = 'https://' + url; // ensure it’s a proper URL
+  }
+
+  Linking.canOpenURL(finalUrl)
+    .then((supported) => {
+      if (supported) {
+        Linking.openURL(finalUrl);
+      } else {
+        Alert.alert(
+          'Unable to open link',
+          'Please check your LinkedIn URL or open it manually.'
+        );
+      }
+    })
+    .catch((err) => console.error('Error opening LinkedIn:', err));
+};
+
+
+
   return (
     <ScrollView style={styles.container} >
       {/* Profile Picture Section */}
@@ -81,7 +112,7 @@ const ProfileScreen = () => {
               user.photos && user.photos.length > 0
                 ? user.photos[0].startsWith('http')
                   ? user.photos[0]
-                  : `http://192.168.0.169:4000${user.photos[0]}`
+                  : `https://three4th-street-backend.onrender.com${user.photos[0]}`
                 : 'https://via.placeholder.com/150',
           }}
           style={styles.profilePic}
@@ -124,7 +155,7 @@ const ProfileScreen = () => {
                   source={{
                     uri: item.startsWith('http')
                       ? item
-                      : `http://192.168.0.169:4000${item}`,
+                      : `https://three4th-street-backend.onrender.com${item}`,
                   }}
                   style={[
                     styles.galleryImage,
@@ -206,18 +237,27 @@ const ProfileScreen = () => {
         <InfoRow label=" Field of Study" value={user.fieldOfStudy} />
         <InfoRow label=" Program of Study" value={user.type} />
         <InfoRow label="Graduation Year" value={user.graduationYear} />
+        <View style={styles.infoRowWrap}>
+  <Text style={styles.infoLabel}>LinkedIn</Text>
+  {user.linkedIn ? (
+    <TouchableOpacity onPress={openLinkedIn} style={{ flex: 1 }}>
+      <Text style={styles.linkText} numberOfLines={0}>
+        {user.linkedIn}
+      </Text>
+    </TouchableOpacity>
+  ) : (
+    <Text style={styles.infoValue}>Not provided</Text>
+  )}
+</View>
+
       </View>
 
-      {/* Professional Info */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Professional Information</Text>
-        <InfoRow label="Industry" value={user.industry} />
-        <InfoRow label="Current Role" value={user.currentRole} />
-        <InfoRow label="LinkedIn" value={user.linkedIn} />
-      </View>
+     
 
       {/* Bio & Interests */}
       <View style={styles.section}>
+
+        
         <Text style={styles.sectionTitle}>Bio</Text>
         <Text style={styles.sectionContent}>{user.bio || 'No bio available.'}</Text>
       </View>
@@ -426,7 +466,35 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
   },
+linkText: {
+  color: '#581845',
+  textDecorationLine: 'underline',
+  fontWeight: '600',
+  textAlign: 'right',
+},
 
+infoRowWrap: {
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  marginBottom: 10,
+},
+
+infoLabel: {
+  color: '#666',
+  fontSize: 14,
+  flexShrink: 0,
+  width: '35%', // keeps the label width fixed and aligned
+},
+
+linkText: {
+  flex: 1,
+  color: '#581845',
+  textDecorationLine: 'underline',
+  fontWeight: '600',
+  textAlign: 'right',
+  flexWrap: 'wrap', // ensures long text wraps
+  lineHeight: 18,
+},
 
 });
 

@@ -16,6 +16,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Linking,
 } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -102,6 +103,8 @@ const EmailScreen = () => {
   const [selectedUniversity, setSelectedUniversity] = useState('');
   const navigation = useNavigation();
   const [errorMessage, setErrorMessage] = useState('');
+  const SUPPORT_EMAIL = 'schoolupdate@34thstreet.net';
+
 
 
   useEffect(() => {
@@ -137,6 +140,28 @@ const EmailScreen = () => {
     navigation.navigate('PasswordScreen');
   };
 
+
+  const openEmailClient = () => {
+  const subject = 'Add my school to 34th Street';
+  const body = [
+    'School name:',
+    'Official school email domain (e.g., @duke.edu):',
+    'Country:',
+    'Program (MBA/MSc/etc.):',
+  ].join('\n');
+
+  const url =
+    `mailto:${SUPPORT_EMAIL}` +
+    `?subject=${encodeURIComponent(subject)}` +
+    `&body=${encodeURIComponent(body)}`;
+
+  Linking.openURL(url).catch(() => {
+    Alert.alert(
+      'Email app not found',
+      `Please email us at ${SUPPORT_EMAIL} from your mail app.`
+    );
+  });
+};
 
 
 
@@ -205,6 +230,18 @@ const EmailScreen = () => {
               {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
               <Text style={styles.noteText}>Email verification helps us keep our community safe.</Text>
+              <Text style={styles.noteText2}>
+  If your school isn’t listed, kindly email us at{' '}
+  <Text
+    style={styles.mailLink}
+    accessibilityRole="link"
+    onPress={openEmailClient}
+  >
+    {SUPPORT_EMAIL}
+  </Text>
+</Text>
+
+              {/* <Text style={styles.noteText2}>If your school isn’t listed, kindly email us at schoolupdate@34thstreet.net</Text> */}
 
               {/* Next Button */}
               <TouchableOpacity onPress={handleNext} activeOpacity={0.8} style={styles.nextButton}>
@@ -301,7 +338,8 @@ const styles = StyleSheet.create({
   iconImage: { width: 100, height: 40 },
   inputTitle: { fontSize: 25, fontWeight: 'bold', marginTop: 15 },
   infoText: { marginTop: 30, fontSize: 15, color: 'gray' },
-  noteText: { fontSize: 12, color: '#581845', fontStyle: 'italic' },
+  noteText: { fontSize: 12, color: '#581845', fontStyle: 'italic', marginBottom:10 },
+  noteText2: { fontSize: 12, color: '#581845', fontStyle: 'italic' },
   learnMore: { color: '#581845', fontWeight: '500' },
   label: { marginTop: 20, fontSize: 16, fontWeight: 'bold', color: '#581845' },
   emailContainer: { flexDirection: 'row', alignItems: 'center', borderBottomColor: 'black', borderBottomWidth: 1, paddingBottom: 10, marginTop: 10, overflow: 'hidden' },
@@ -313,6 +351,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 5,
   },
+  mailLink: {
+  color: '#581845',          // brand color
+  fontWeight: '700',
+  textDecorationLine: 'underline',
+  textDecorationColor: '#581845',
+},
+
 });
 
 
