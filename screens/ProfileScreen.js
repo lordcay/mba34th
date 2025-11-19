@@ -35,11 +35,15 @@ const ProfileScreen = () => {
 
 
 
+
   useFocusEffect(
     useCallback(() => {
       console.log('🔁 Updated user:', user);
     }, [user])
   );
+
+ 
+
 
   const setAsProfilePhoto = async (index) => {
     if (index === 0) return; // already the profile photo
@@ -53,7 +57,7 @@ const ProfileScreen = () => {
       const userId = await AsyncStorage.getItem('userId');
 
       const res = await axios.put(
-        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+        `http://192.168.0.169:4000/accounts/${userId}`,
         { photos: reordered },
         {
           headers: {
@@ -112,7 +116,7 @@ const ProfileScreen = () => {
               user.photos && user.photos.length > 0
                 ? user.photos[0].startsWith('http')
                   ? user.photos[0]
-                  : `https://three4th-street-backend.onrender.com${user.photos[0]}`
+                  : `http://192.168.0.169:4000${user.photos[0]}`
                 : 'https://via.placeholder.com/150',
           }}
           style={styles.profilePic}
@@ -155,7 +159,7 @@ const ProfileScreen = () => {
                   source={{
                     uri: item.startsWith('http')
                       ? item
-                      : `https://three4th-street-backend.onrender.com${item}`,
+                      : `http://192.168.0.169:4000${item}`,
                   }}
                   style={[
                     styles.galleryImage,

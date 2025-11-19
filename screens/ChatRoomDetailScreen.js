@@ -13,7 +13,7 @@ import { AuthContext } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 
-const socket = io('https://three4th-street-backend.onrender.com'); // ✅ Replace with your IP
+const socket = io('http://192.168.0.169:4000'); // ✅ Replace with your IP
 
 const ChatRoomDetailScreen = ({ route }) => {
     const { chatroomId } = route.params;
@@ -43,7 +43,7 @@ const ChatRoomDetailScreen = ({ route }) => {
     useEffect(() => {
         const fetchMessages = async () => {
             try {
-                const res = await axios.get(`https://three4th-street-backend.onrender.com/api/chatroom-messages/${chatroomId}/messages`);
+                const res = await axios.get(`http://192.168.0.169:4000/api/chatroom-messages/${chatroomId}/messages`);
                 setMessages(res.data);
             } catch (err) {
                 console.error('❌ Failed to fetch messages', err);

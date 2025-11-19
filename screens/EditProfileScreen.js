@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Pressable,
+  StatusBar
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Linking, Platform } from 'react-native';
@@ -24,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons'; // For image delete icon
 // import { useContext } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
+import { SafeAreaView } from 'react-native-safe-area-context';
 // add this with your other imports
 // import { Linking } from 'react-native';
 
@@ -78,6 +81,10 @@ const EditProfileScreen = ({ navigation }) => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 const [confirmDeleteText, setConfirmDeleteText] = useState('');
 const [deleting, setDeleting] = useState(false);
+
+
+
+
 
 
 
@@ -175,7 +182,7 @@ const handleDeleteAccount = async () => {
 
     // IMPORTANT: Your backend should perform irreversible deletion of the account
     // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+    await axios.delete(`http://192.168.0.169:4000/accounts/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
       // If your backend supports soft vs hard deletes, pass a flag:
       params: { hard: true }
@@ -441,7 +448,7 @@ const handleDeleteAccount = async () => {
       };
 
       const res = await axios.put(
-        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+        `http://192.168.0.169:4000/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -473,8 +480,26 @@ const handleDeleteAccount = async () => {
 
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>Edit Your Profile</Text>
+<SafeAreaView style={styles.container}>
+     
+    <View style={styles.headerRow}>
+  <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+    <Ionicons name="chevron-back-outline" size={22} color="#581845" />
+    <Text style={styles.backText}>Back</Text>
+  </TouchableOpacity>
+  <Text numberOfLines={1} style={styles.headerTitle}>Edit Your Profile</Text>
+
+  {/* Spacer to balance layout */}
+  <View style={{ width: 60 }} />
+</View>
+    
+    <ScrollView >
+       {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+           <Ionicons name="arrow-back" size={24} color="#000" />
+         </TouchableOpacity>
+      <Text style={styles.header}>Edit Your Profile</Text>  */}
+
+     
 
       <Text style={styles.label}>Nickname <Text style={styles.required}>*</Text></Text>
       <TextInput
@@ -789,7 +814,7 @@ const handleDeleteAccount = async () => {
         style={styles.input}
         value={linkedIn}
         onChangeText={setLinkedIn}
-        placeholder="Consulting"
+        placeholder="https://www.linkedin.com/in/caleb-chinedu-obodeh"
       />
       <Text style={styles.label}>Fun Fact</Text>
       <TextInput
@@ -992,6 +1017,7 @@ const handleDeleteAccount = async () => {
 </Modal>
 
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -1000,7 +1026,65 @@ export default EditProfileScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff', marginTop: 20, },
-  header: { fontSize: 24, fontWeight: '700', color: '#581845', marginBottom: 20, marginTop: 60, },
+  headerRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  // paddingHorizontal: 3,
+  height: 30,
+},
+
+backButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+  paddingHorizontal: 4,
+  paddingVertical: 4,
+  minWidth: 60,
+},
+
+backText: {
+  fontSize: 18,
+  color: '#581845',
+},
+
+headerTitle: {
+  flex: 1,
+  textAlign: 'center',
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#581845',
+  paddingHorizontal: 8,
+},
+
+// backButton: {
+//   width: 44,
+//   height: 44,
+//   alignItems: 'center',
+//   justifyContent: 'center',
+// },
+// headerRow: {
+//   flexDirection: 'row',
+//   alignItems: 'center',
+//   justifyContent: 'space-between',
+//   paddingHorizontal: 12,
+//   height: 44,
+//   marginTop:30,
+  
+// },
+// headerTitle: {
+//   flex: 1,
+//   textAlign: 'center',
+//   fontSize: 17,
+//   fontWeight: '600',
+//   color: '#222',
+//   paddingHorizontal: 8, // helps with long titles truncation
+// },
+// backText: {
+//   fontSize: 16,
+//   color: '#000',
+// },
+//   header: { fontSize: 24, fontWeight: '700', color: '#581845', marginBottom: 20, marginTop: 10, },
 
   label: {
     marginTop: 15,
@@ -1198,6 +1282,8 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
+
+
 
   modalCancel: {
     marginTop: 15,

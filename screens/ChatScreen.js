@@ -33,9 +33,11 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+      const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
         headers: { Authorization: `Bearer ${token}` }
+
       });
+        console.log('Fetching user with token:', token);
 
       const fresh = Array.isArray(res.data) ? res.data.slice() : [];
       fresh.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
@@ -150,7 +152,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
   const getPhotoUri = (photo) =>
     photo
-      ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+      ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
 
   const formatSchoolFromEmail = (email) => {
@@ -163,15 +165,41 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
               .join(' ');
   };
 
-  const openDM = (userObj) => {
-    const targetId = String(userObj.id || userObj.userId || userObj._id);
-    setConversations(prev =>
-      prev.map(c =>
-        String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
-      )
-    );
+const openDM = async (userObj) => {
+  const targetId = String(userObj.id || userObj.userId || userObj._id);
+  
+  // Reset unread count optimistically
+  setConversations(prev =>
+    prev.map(c =>
+      String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
+    )
+  );
+
+  try {
+    const res = await axios.get(`http://192.168.0.169:4000/accounts/${targetId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const fullUser = res.data;
+
+    navigation.navigate('PrivateChat', { user: fullUser });
+  } catch (err) {
+    console.error('❌ Failed to fetch full profile:', err);
+    // Optional: still navigate with partial data
     navigation.navigate('PrivateChat', { user: userObj });
-  };
+  }
+};
+
+
+  // const openDM = (userObj) => {
+  //   const targetId = String(userObj.id || userObj.userId || userObj._id);
+  //   setConversations(prev =>
+  //     prev.map(c =>
+  //       String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
+  //     )
+  //   );
+  //   navigation.navigate('PrivateChat', { user: userObj });
+  // };
 
   const renderItem = ({ item }) => {
     const school = formatSchoolFromEmail(item.email);
@@ -182,6 +210,8 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
       lastName: item.lastName,
       email: item.email,
       photos: item.photos || [],
+     
+      
     };
 
     const profileUri = getPhotoUri(userX.photos?.[0]);
@@ -345,7 +375,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+//       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       // sort newest first (helps when socket updates arrive)
@@ -454,7 +484,7 @@ const styles = StyleSheet.create({
 //   const getPhotoUri = (photo) => {
 //     if (!photo)
 //       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-//     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
+//     return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
 //   };
 
 //   const formatSchoolFromEmail = (email) => {

@@ -21,6 +21,8 @@ import api from '../services/api';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { showTopToast, playPing } from '../utils/notify';
  import { useUnread } from '../context/UnreadContext';
+ import containsObjectionableContent from '../utils/filterObjectionableContent'; // adjust path if needed
+
 
 
 
@@ -29,7 +31,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const BASE_URL = 'http://192.168.0.169:4000';
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 
@@ -55,19 +57,34 @@ export default function ChatRoomScreen({ route }) {
     routeHook?.params?.room?.name ||
     'Chat';
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: chatroomName,
-      headerBackTitleVisible: false,
-      headerBackTitle: '',
-      headerLeft: () => (
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-          <Ionicons name="chevron-back" size={26} color="#581845" />
-        </TouchableOpacity>
-      ),
-      headerTitleStyle: { color: '#222' },
-    });
-  }, [navigation, chatroomName]);
+
+useLayoutEffect(() => {
+  navigation.setOptions({
+    title: chatroomName,
+    headerBackTitle: 'Back',
+    headerBackTitleVisible: true,      // hide back text
+    headerTintColor: '#581845',         // icon tint
+    headerTitleStyle: { color: '#222' },
+    headerLeft: undefined,              // 👈 restores NATIVE button
+  });
+}, [navigation, chatroomName]);
+
+    
+  // useLayoutEffect(() => {
+  //   navigation.setOptions({
+  //     title: chatroomName,
+  //     headerBackTitleVisible: false,
+  //     headerBackTitle: '',
+  //     headerLeft: () => (
+  //       <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+  //         <Ionicons name="chevron-back" size={26} color="#581845" />
+  //       </TouchableOpacity>
+  //     ),
+
+      
+  //     headerTitleStyle: { color: '#222' },
+  //   });
+  // }, [navigation, chatroomName]);
 
   const chatroomId = route?.params?.chatroomId;
 
@@ -402,6 +419,11 @@ useEffect(() => {
 
   const sendMessage = async () => {
   if (!text.trim()) return;
+   // 🚫 Check before sending
+  if (containsObjectionableContent(inputText)) {
+    Alert.alert("Inappropriate Content", "Your message contains words that violate community guidelines.");
+    return;
+  }
 
   try {
     const userStr = await AsyncStorage.getItem('user');
@@ -748,7 +770,7 @@ const styles = StyleSheet.create({
 //   useSafeAreaInsets,
 // } from 'react-native-safe-area-context';
 
-// const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// const BASE_URL = 'http://192.168.0.169:4000';
 // const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 // const SOCKET_SERVER_URL = BASE_URL;
 

@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -19,7 +19,8 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
-        "NSCameraUsageDescription": "We need camera access so you can take a new profile picture."
+        "NSCameraUsageDescription": "We need camera access so you can take a new profile picture.",
+        "LSApplicationQueriesSchemes": ["linkedin"]
       }
     },
     "android": {

@@ -164,7 +164,7 @@ const UserCard = ({ u, navigation }) => {
 
   const renderSlide = ({ item: photo }) => {
     const uri = photo
-      ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+      ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
       : null;
 
     return (
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
 
 //   const renderSlide = ({ item: photo }) => {
 //     const uri = photo
-//       ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
 //       : null;
 
 //     return (
