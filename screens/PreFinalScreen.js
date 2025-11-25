@@ -1,7 +1,7 @@
 
 
 import { SafeAreaView, StyleSheet, Text, View, TouchableOpacity, Linking } from 'react-native';
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
@@ -19,6 +19,24 @@ const PreFinalScreen = () => {
   const [loading, setLoading] = useState(false);
     const [agree, setAgree] = useState(false);
 
+
+     useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,     // Cleaner look
+      headerTitle: '',
+      headerBackTitle: 'Back',
+      headerBackTitleVisible: true,
+      headerStyle: {
+        backgroundColor: '#ffffff',   // Top bar background
+        borderBottomWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: '#581845',     // Back icon color
+      headerShadowVisible: false,
+    });
+  }, [navigation]);
 
   useEffect(() => {
     const loadToken = async () => {
@@ -70,7 +88,7 @@ const PreFinalScreen = () => {
         bio: userData.bio || '',
         interests: userData.interests || [],
       };
-      const res = await axios.post('http://192.168.0.169:4000/accounts/register', payload);
+      const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
       const { userId } = res.data;
       navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
       clearAllScreenData();

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,24 @@ const TypeScreen = () => {
   const navigation = useNavigation();
   const [error, setError] = useState('');
 
+
+     useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,     // Cleaner look
+      headerTitle: '',
+      headerBackTitle: 'Back',
+      headerBackTitleVisible: true,
+      headerStyle: {
+        backgroundColor: '#ffffff',   // Top bar background
+        borderBottomWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: '#581845',     // Back icon color
+      headerShadowVisible: false,
+    });
+  }, [navigation]);
 
 
   useEffect(() => {

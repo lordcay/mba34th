@@ -31,7 +31,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const BASE_URL = 'http://192.168.0.169:4000';
+const BASE_URL = 'https://three4th-street-backend.onrender.com';
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 
@@ -70,21 +70,7 @@ useLayoutEffect(() => {
 }, [navigation, chatroomName]);
 
     
-  // useLayoutEffect(() => {
-  //   navigation.setOptions({
-  //     title: chatroomName,
-  //     headerBackTitleVisible: false,
-  //     headerBackTitle: '',
-  //     headerLeft: () => (
-  //       <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
-  //         <Ionicons name="chevron-back" size={26} color="#581845" />
-  //       </TouchableOpacity>
-  //     ),
-
-      
-  //     headerTitleStyle: { color: '#222' },
-  //   });
-  // }, [navigation, chatroomName]);
+ 
 
   const chatroomId = route?.params?.chatroomId;
 
@@ -320,9 +306,6 @@ const onNew = (msg) => {
   requestAnimationFrame(() => flatListRef.current?.scrollToEnd({ animated: true }));
 };
 
-
- 
-
     // ✅ typing indicators (server emits these)
 
     const onUserTyping = ({ userId: uid, senderName }) => {
@@ -419,11 +402,7 @@ useEffect(() => {
 
   const sendMessage = async () => {
   if (!text.trim()) return;
-   // 🚫 Check before sending
-  if (containsObjectionableContent(inputText)) {
-    Alert.alert("Inappropriate Content", "Your message contains words that violate community guidelines.");
-    return;
-  }
+  
 
   try {
     const userStr = await AsyncStorage.getItem('user');
@@ -472,6 +451,15 @@ useEffect(() => {
     }
   } catch {
     Alert.alert('Failed to send message');
+
+     // ⛔️ Detect objectionable content rejection
+        const serverMsg = err?.response?.data?.message;
+    
+        if (serverMsg === 'Message contains inappropriate content.') {
+          Alert.alert('Message not sent', 'This message includes inappropriate language and cannot be delivered.');  // fallback
+        } else {
+          Alert.alert('Failed to send message');  // fallback
+        }
   }
 };
 
@@ -770,7 +758,7 @@ const styles = StyleSheet.create({
 //   useSafeAreaInsets,
 // } from 'react-native-safe-area-context';
 
-// const BASE_URL = 'http://192.168.0.169:4000';
+// const BASE_URL = 'https://three4th-street-backend.onrender.com';
 // const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 // const SOCKET_SERVER_URL = BASE_URL;
 

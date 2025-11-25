@@ -1,5 +1,5 @@
 // PasswordScreen.js
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,24 @@ const PasswordScreen = () => {
   const [error, setError] = useState('');
   const [secureText, setSecureText] = useState(true);
 
+
+     useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,     // Cleaner look
+      headerTitle: '',
+      headerBackTitle: 'Back',
+      headerBackTitleVisible: true,
+      headerStyle: {
+        backgroundColor: '#ffffff',   // Top bar background
+        borderBottomWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: '#581845',     // Back icon color
+      headerShadowVisible: false,
+    });
+  }, [navigation]);
 
 
   const handleNext = () => {

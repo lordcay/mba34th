@@ -182,7 +182,7 @@ const handleDeleteAccount = async () => {
 
     // IMPORTANT: Your backend should perform irreversible deletion of the account
     // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`http://192.168.0.169:4000/accounts/${userId}`, {
+    await axios.delete(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
       // If your backend supports soft vs hard deletes, pass a flag:
       params: { hard: true }
@@ -448,7 +448,7 @@ const handleDeleteAccount = async () => {
       };
 
       const res = await axios.put(
-        `http://192.168.0.169:4000/accounts/${userId}`,
+        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
         payload,
         {
           headers: {

@@ -27,7 +27,7 @@ import { AntDesign } from '@expo/vector-icons';
 
 
 
-const BASE_URL = 'http://192.168.0.169:4000';
+const BASE_URL = 'https://three4th-street-backend.onrender.com';
 
 const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -89,21 +89,7 @@ const reportReasons = [
   'Hate speech',
   'Other',
 ];
-// const reportReasons = {
-// Misleading: [
-// 'Fake profile, scammer, not one person',
-// 'Someone is selling something',
-// 'Someone under 18 is involved'
-// ],
-// Harassment: [
-// 'Nudity or something sexually explicit',
-// 'Abusive/hateful/threatening behavior'
-// ],
-// Safety: [
-// 'In person physical/sexual harm or stalking',
-// 'Possible threat to themselves or others'
-// ]
-// };
+
 
 
 
@@ -395,12 +381,7 @@ const renderReportModal = () => (
 </View>
 
       {/* Back icon */}
-      {/* {reportStep > 1 && !reportSuccess && (
-        <TouchableOpacity onPress={() => setReportStep((s) => s - 1)}>
-          <AntDesign name="left" size={22} color="#581845" />
-          
-        </TouchableOpacity>
-      )} */}
+      
 
       {/* Step indicator */}
       {!reportSuccess && (
@@ -480,13 +461,7 @@ const renderReportModal = () => (
             Are you sure you want to report this user?
           </Text>
 
-          {/* <TouchableOpacity
-  style={[styles.blockBtn, { backgroundColor: '#dc3545' }]}
-  onPress={() => setReportModalVisible(true)}
->
-  <Ionicons name="alert-circle-outline" size={20} color="#fff" />
-  <Text style={styles.editBtnText}> Report User</Text>
-</TouchableOpacity> */}
+         
           <TouchableOpacity
             style={{
               backgroundColor: '#dc3545',
@@ -528,9 +503,7 @@ const renderReportModal = () => (
 
     return (
         <ScrollView style={styles.container}>
-            {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-                          <Ionicons name="arrow-back" size={24} color="#000" />
-                        </TouchableOpacity> */}
+          
             {/* Profile Header */}
             <View style={styles.profileHeader}>
                 
@@ -662,29 +635,7 @@ onPress={handleBlockUser }
 </View>
 
 {renderReportModal()}
-{/* Report Modal */}
-{/* <Modal visible={reportModalVisible} transparent animationType="slide">
-<View style={styles.modalBackdrop}>
-<View style={styles.modalBox}>
-<Text style={styles.modalTitle}>Report User</Text>
-<TextInput
-placeholder="Enter reason..."
-multiline
-value={reportReason}
-onChangeText={setReportReason}
-style={styles.textArea}
-/>
-<View style={styles.modalActions}>
-<TouchableOpacity onPress={() => setReportModalVisible(false)} style={styles.cancelBtn}>
-<Text style={{ color: '#fff' }}>Cancel</Text>
-</TouchableOpacity>
-<TouchableOpacity onPress={handleReportUser} style={styles.submitBtn}>
-<Text style={{ color: '#fff' }}>Submit</Text>
-</TouchableOpacity>
-</View>
-</View>
-</View>
-</Modal> */}
+
             
         </ScrollView>
     );
@@ -838,7 +789,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.0.169:4000';
+// const BASE_URL = 'https://three4th-street-backend.onrender.com';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -1513,7 +1464,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.0.169:4000';
+// const BASE_URL = 'https://three4th-street-backend.onrender.com';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 

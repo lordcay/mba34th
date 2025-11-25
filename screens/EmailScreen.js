@@ -18,7 +18,7 @@ import {
   ScrollView,
   Linking,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fontisto from 'react-native-vector-icons/Fontisto';
 import { useNavigation } from '@react-navigation/native';
@@ -106,6 +106,24 @@ const EmailScreen = () => {
   const SUPPORT_EMAIL = 'schoolupdate@34thstreet.net';
 
 
+
+     useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,     // Cleaner look
+      headerTitle: '',
+      headerBackTitle: 'Back',
+      headerBackTitleVisible: true,
+      headerStyle: {
+        backgroundColor: '#ffffff',   // Top bar background
+        borderBottomWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: '#581845',     // Back icon color
+      headerShadowVisible: false,
+    });
+  }, [navigation]);
 
   useEffect(() => {
     getRegistrationProgress('Email').then((progressData) => {

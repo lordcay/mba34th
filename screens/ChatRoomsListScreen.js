@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useUnread } from '../context/UnreadContext';
 // ── API ────────────────────────────────────────────────────────────
-const API_URL = 'http://192.168.0.169:4000/chatrooms';
+const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
 
 // ── Local Images (make sure these files exist in /assets) ─────────
 import IMG_VILLAGE from '../assets/2.jpg';
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
 // import { BlurView } from 'expo-blur';
 
 // // ── API ────────────────────────────────────────────────────────────
-// const API_URL = 'http://192.168.0.169:4000/chatrooms';
+// const API_URL = 'https://three4th-street-backend.onrender.com/chatrooms';
 
 // // ── Local Images (make sure these files exist in /assets) ─────────
 // import IMG_VILLAGE from '../assets/2.jpg';

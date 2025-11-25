@@ -3,7 +3,7 @@
 
 // ResetPasswordScreen.js
 
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -14,12 +14,32 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import axios from 'axios';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
 
 const ResetPasswordScreen = ({ navigation }) => {
     const [token, setToken] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [loading, setLoading] = useState(false);
+
+      useLayoutEffect(() => {
+        navigation.setOptions({
+          headerShown: true,
+          headerTransparent: false,     // Cleaner look
+          headerTitle: '',
+          headerBackTitle: 'Back',
+          headerBackTitleVisible: true,
+          headerStyle: {
+            backgroundColor: '#ffffff',   // Top bar background
+            borderBottomWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+          },
+          headerTintColor: '#581845',     // Back icon color
+          headerShadowVisible: false,
+        });
+      }, [navigation]);
 
     const handleResetPassword = async () => {
         if (!token || !password || !confirmPassword) {
@@ -41,7 +61,7 @@ const ResetPasswordScreen = ({ navigation }) => {
             setLoading(true);
 
             const response = await axios.post(
-                'http://192.168.0.169:4000/accounts/reset-password', // 👈 Replace with your actual base URL
+                'https://three4th-street-backend.onrender.com/accounts/reset-password', // 👈 Replace with your actual base URL
                 {
                     token,
                     password,

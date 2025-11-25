@@ -1,7 +1,7 @@
 
 import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useContext, useState } from 'react';
+import { useContext, useLayoutEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext'; // Ensure this is correctly imported
 import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import LottieView from 'lottie-react-native';
@@ -17,6 +17,26 @@ const VerifyOTPScreen = () => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
 
+  
+       useLayoutEffect(() => {
+      navigation.setOptions({
+        headerShown: true,
+        headerTransparent: false,     // Cleaner look
+        headerTitle: '',
+        headerBackTitle: 'Back',
+        headerBackTitleVisible: true,
+        headerStyle: {
+          backgroundColor: '#ffffff',   // Top bar background
+          borderBottomWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTintColor: '#581845',     // Back icon color
+        headerShadowVisible: false,
+      });
+    }, [navigation]);
+  
+
 
   const verifyOTP = async () => {
     setLoading(true); // Start loader
@@ -29,7 +49,7 @@ const VerifyOTPScreen = () => {
     }
 
     try {
-      const response = await axios.post('http://192.168.0.169:4000/accounts/verify-email', { token: otp });
+      const response = await axios.post('https://three4th-street-backend.onrender.com/accounts/verify-email', { token: otp });
 
       console.log("✅ Verification Response:", response.data);
 

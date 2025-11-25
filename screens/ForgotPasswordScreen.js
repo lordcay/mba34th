@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -12,10 +12,34 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+
+
+ 
 
 const ForgotPasswordScreen = ({ navigation }) => {
+    //   const navigation = useNavigation();
+    
     const [email, setEmail] = useState('');
     const [loading, setLoading] = useState(false);
+
+     useLayoutEffect(() => {
+    navigation.setOptions({
+      headerShown: true,
+      headerTransparent: false,     // Cleaner look
+      headerTitle: '',
+      headerBackTitle: 'Back',
+      headerBackTitleVisible: true,
+      headerStyle: {
+        backgroundColor: '#ffffff',   // Top bar background
+        borderBottomWidth: 0,
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+      headerTintColor: '#581845',     // Back icon color
+      headerShadowVisible: false,
+    });
+  }, [navigation]);
 
     const handleForgotPassword = async () => {
         if (!email.trim()) {
@@ -25,7 +49,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
         try {
             setLoading(true);
-            const response = await axios.post('http://192.168.0.169:4000/accounts/forgot-password', {
+            const response = await axios.post('https://three4th-street-backend.onrender.com/accounts/forgot-password', {
                 email,
             });
 

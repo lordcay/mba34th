@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  TextInput
+  TextInput,
 } from 'react-native';
 import axios from 'axios';
 import moment from 'moment';
@@ -14,43 +14,56 @@ import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { socket } from '../socket';
+import api from '../services/api';
+
+
+const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const ChatScreen = () => {
   const [conversations, setConversations] = useState([]);
 
-  // ✨ Move this ABOVE currentUserId so 'user' exists
+  // pull auth + unread control from context
   const { token, user, setUnreadCount } = useContext(AuthContext);
-
-  // ✨ Now it's safe to read user
   const currentUserId = user?._id || user?.id || null;
 
   const navigation = useNavigation();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
 
-  // --- Tab filtering + search + sorting
-const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-
   const fetchConversations = useCallback(async () => {
     try {
-      const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
-        headers: { Authorization: `Bearer ${token}` }
-
-      });
-        console.log('Fetching user with token:', token);
+      const res = await axios.get(
+        `${BASE_URL}/messages/conversations/list`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      console.log('Fetching conversations with token:', token);
 
       const fresh = Array.isArray(res.data) ? res.data.slice() : [];
-      fresh.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+      fresh.sort(
+        (a, b) =>
+          new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+      );
 
       setConversations((prev) => {
-        const prevMap = new Map(prev.map((c) => [String(c.userId || c._id), c]));
+        const prevMap = new Map(
+          prev.map((c) => [String(c.userId || c._id), c])
+        );
         const merged = fresh.map((item) => {
           const key = String(item.userId || item._id);
           const old = prevMap.get(key);
-          const unreadCount = Math.max(item.unreadCount || 0, old?.unreadCount || 0);
+          const unreadCount = Math.max(
+            item.unreadCount || 0,
+            old?.unreadCount || 0
+          );
           return { ...item, unreadCount };
         });
-        merged.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        merged.sort(
+          (a, b) =>
+            new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+        );
         return merged;
       });
     } catch (err) {
@@ -58,43 +71,57 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
     }
   }, [token]);
 
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
-
-  // 🔔 Publish total unread to context → Tab badge uses this
   useEffect(() => {
-    // ✨ Fix: add the missing '+' in reduce
-    const total = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Update total unread for tab badge
+  useEffect(() => {
+    const total = conversations.reduce(
+      (sum, c) => sum + (c.unreadCount || 0),
+      0
+    );
     setUnreadCount?.(total);
   }, [conversations, setUnreadCount]);
 
-  // ✅ Listen for messages marked as read (server emits 'message:read')
+  // Listen for "message:read" → clear unread for that conversation
   useEffect(() => {
     const onMessageRead = ({ readerId, otherId }) => {
       if (!currentUserId) return;
       if (String(readerId) !== String(currentUserId)) return;
-      setConversations(prev =>
-        prev.map(c =>
+
+      setConversations((prev) =>
+        prev.map((c) =>
           String(c.userId || c._id) === String(otherId)
             ? { ...c, unreadCount: 0 }
             : c
         )
       );
     };
+
     socket.on('message:read', onMessageRead);
     return () => socket.off('message:read', onMessageRead);
   }, [currentUserId]);
 
-  // ✅ Listen for conversation:update → update row WITHOUT refetching
+  // Listen for conversation:update → keep list live
   useEffect(() => {
     if (!currentUserId) return;
 
     const onConvUpdate = (payload) => {
       if (!payload) return;
-      const { peerA, peerB, lastMessage, timestamp, unreadBumpFor, unreadResetFor } = payload;
+      const {
+        peerA,
+        peerB,
+        lastMessage,
+        timestamp,
+        unreadBumpFor,
+        unreadResetFor,
+      } = payload;
 
-      const otherUserId = String(peerA) === String(currentUserId)
-        ? String(peerB)
-        : String(peerA);
+      const otherUserId =
+        String(peerA) === String(currentUserId)
+          ? String(peerB)
+          : String(peerA);
 
       setConversations((prev) => {
         let found = false;
@@ -104,10 +131,16 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
           found = true;
 
           let unreadCount = c.unreadCount || 0;
-          if (unreadBumpFor && String(unreadBumpFor) === String(currentUserId)) {
+          if (
+            unreadBumpFor &&
+            String(unreadBumpFor) === String(currentUserId)
+          ) {
             unreadCount = unreadCount + 1;
           }
-          if (unreadResetFor && String(unreadResetFor) === String(currentUserId)) {
+          if (
+            unreadResetFor &&
+            String(unreadResetFor) === String(currentUserId)
+          ) {
             unreadCount = 0;
           }
 
@@ -119,6 +152,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
           };
         });
 
+        // If conversation wasn’t there yet, create a minimal row
         const result = found
           ? updated
           : [
@@ -131,12 +165,18 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
                 lastMessage: lastMessage || '',
                 timestamp: timestamp || Date.now(),
                 unreadCount:
-                  unreadBumpFor && String(unreadBumpFor) === String(currentUserId) ? 1 : 0,
+                  unreadBumpFor &&
+                  String(unreadBumpFor) === String(currentUserId)
+                    ? 1
+                    : 0,
               },
               ...updated,
             ];
 
-        result.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        result.sort(
+          (a, b) =>
+            new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+        );
         return result;
       });
     };
@@ -145,6 +185,7 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
     return () => socket.off('conversation:update', onConvUpdate);
   }, [currentUserId]);
 
+  // Refetch when screen focused
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', fetchConversations);
     return unsubscribe;
@@ -152,54 +193,141 @@ const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
   const getPhotoUri = (photo) =>
     photo
-      ? (photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`)
+      ? photo.startsWith('http')
+        ? photo
+        : `${BASE_URL}${photo}`
       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
 
   const formatSchoolFromEmail = (email) => {
     const raw = email?.split('@')[1]?.split('.')[0];
     if (!raw) return 'Unknown';
-    return raw.replace(/[-_]/g, ' ')
-              .trim()
-              .split(/\s+/)
-              .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-              .join(' ');
+    return raw
+      .replace(/[-_]/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .map(
+        (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
+      )
+      .join(' ');
   };
 
+
+//   const toAbs = (p) =>
+//   p && typeof p === "string" && !p.startsWith("http")
+//     ? `${BASE_URL}${p}`
+//     : p;
+
+// const normalizeUser = (raw) => {
+//   if (!raw) return null;
+//   const photos = Array.isArray(raw.photos)
+//     ? raw.photos.map(toAbs)
+//     : [];
+
+//   return {
+//     ...raw,
+//     id: raw.id || raw._id,
+//     _id: raw._id || raw.id,
+//     photos,
+//     avatarUrl: photos[0] || toAbs(raw.avatarUrl),
+//   };
+// };
+
+
+//   // 🔑 Open DM, fetch full profile safely, then navigate
+//   const openDM = async (userObj) => {
+//     const targetId = String(
+//       userObj.id || userObj.userId || userObj._id
+//     );
+
+//     if (!targetId) return;
+
+//     // Optimistically clear unread count for this conversation
+//     setConversations((prev) =>
+//       prev.map((c) =>
+//         String(c.userId || c._id) === targetId
+//           ? { ...c, unreadCount: 0 }
+//           : c
+//       )
+//     );
+
+//     try {
+//       const res = await axios.get(
+//         `${BASE_URL}/accounts/${targetId}`,
+//         {
+//           headers: { Authorization: `Bearer ${token}` },
+//         }
+//       );
+
+//       // Handle both possible backend formats:
+//       // { user: { ... } }  OR  { ...userFields }
+//       // const fullUser = res.data?.user || res.data;
+
+//       // navigation.navigate('PrivateChat', { user: fullUser });
+
+// const apiUser = res.data?.user || res.data;
+// const fullUser = normalizeUser(apiUser);
+
+// navigation.navigate('PrivateChat', { user: fullUser });
+
+
+//     } catch (err) {
+//       console.error('❌ Failed to fetch full profile:', err);
+//       // Still navigate with partial data if fetch fails
+//       navigation.navigate('PrivateChat', { user: userObj });
+//     }
+//   };
+
+
+const toAbs = (p) =>
+  p && typeof p === 'string' && !p.startsWith('http')
+    ? `${BASE_URL}${p}`
+    : p;
+
+const normalizeUser = (raw) => {
+  if (!raw) return null;
+  const photos = Array.isArray(raw.photos)
+    ? raw.photos.map(toAbs)
+    : [];
+  return {
+    ...raw,
+    id: raw.id || raw._id || raw.userId,
+    _id: raw._id || raw.id || raw.userId,
+    photos,
+    avatarUrl: photos[0] || toAbs(raw.avatarUrl),
+  };
+};
+
+// 🔑 Open DM, fetch full profile safely, then navigate
 const openDM = async (userObj) => {
-  const targetId = String(userObj.id || userObj.userId || userObj._id);
-  
-  // Reset unread count optimistically
-  setConversations(prev =>
-    prev.map(c =>
-      String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
+  const targetId = String(
+    userObj.id || userObj.userId || userObj._id
+  );
+
+  if (!targetId) return;
+
+  // Optimistically clear unread count for this conversation
+  setConversations((prev) =>
+    prev.map((c) =>
+      String(c.userId || c._id) === targetId
+        ? { ...c, unreadCount: 0 }
+        : c
     )
   );
 
   try {
-    const res = await axios.get(`http://192.168.0.169:4000/accounts/${targetId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    // ✅ Use the same api instance as ChatRoomScreen
+    const res = await api.get(`/accounts/${targetId}`);
 
-    const fullUser = res.data;
+    const apiUser = res.data?.user || res.data;
+    const fullUser = normalizeUser(apiUser);
 
     navigation.navigate('PrivateChat', { user: fullUser });
   } catch (err) {
-    console.error('❌ Failed to fetch full profile:', err);
-    // Optional: still navigate with partial data
-    navigation.navigate('PrivateChat', { user: userObj });
+    console.error('❌ Failed to fetch full profile (DM open):', err?.response?.data || err.message);
+    // Still navigate with partial data if fetch fails
+    navigation.navigate('PrivateChat', { user: normalizeUser(userObj) });
   }
 };
-
-
-  // const openDM = (userObj) => {
-  //   const targetId = String(userObj.id || userObj.userId || userObj._id);
-  //   setConversations(prev =>
-  //     prev.map(c =>
-  //       String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
-  //     )
-  //   );
-  //   navigation.navigate('PrivateChat', { user: userObj });
-  // };
 
   const renderItem = ({ item }) => {
     const school = formatSchoolFromEmail(item.email);
@@ -210,22 +338,31 @@ const openDM = async (userObj) => {
       lastName: item.lastName,
       email: item.email,
       photos: item.photos || [],
-     
-      
     };
 
     const profileUri = getPhotoUri(userX.photos?.[0]);
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => openDM(userX)}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => openDM(userX)}
+      >
         <Image source={{ uri: profileUri }} style={styles.avatar} />
         <View style={styles.chatDetails}>
           <View style={styles.row}>
-            <Text style={styles.name}>{userX.firstName} {userX.lastName}</Text>
-            <Text style={styles.timestamp}>{item.timestamp ? moment(item.timestamp).fromNow() : ''}</Text>
+            <Text style={styles.name}>
+              {userX.firstName} {userX.lastName}
+            </Text>
+            <Text style={styles.timestamp}>
+              {item.timestamp
+                ? moment(item.timestamp).fromNow()
+                : ''}
+            </Text>
             {item.unreadCount > 0 && (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+                <Text style={styles.unreadText}>
+                  {item.unreadCount}
+                </Text>
               </View>
             )}
           </View>
@@ -238,47 +375,45 @@ const openDM = async (userObj) => {
     );
   };
 
+  // Tab filter
   const byTab = conversations.filter((c) => {
-  if (activeTab === 'Unread') {
-    return (c.unreadCount || 0) > 0;
-  }
-  if (activeTab === 'Recent') {
-    const t = c.timestamp ? new Date(c.timestamp).getTime() : 0;
-    return t > 0 && (Date.now() - t) <= RECENT_WINDOW_MS;
-  }
-  // 'All'
-  return true;
-});
+    if (activeTab === 'Unread') {
+      return (c.unreadCount || 0) > 0;
+    }
+    if (activeTab === 'Recent') {
+      const t = c.timestamp
+        ? new Date(c.timestamp).getTime()
+        : 0;
+      return t > 0 && Date.now() - t <= RECENT_WINDOW_MS;
+    }
+    return true; // "All"
+  });
 
-// Search on top of tab filter
-const bySearch = byTab.filter((c) => {
-  if (!search) return true;
-  const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
-  return hay.includes(search.toLowerCase());
-});
+  // Search on top of tab filter
+  const bySearch = byTab.filter((c) => {
+    if (!search) return true;
+    const hay = `${c.firstName || ''} ${c.lastName || ''} ${
+      c.email || ''
+    }`.toLowerCase();
+    return hay.includes(search.toLowerCase());
+  });
 
-// Sort (explicit for clarity)
-const finalList = bySearch.slice().sort((a, b) => {
-  const ta = new Date(a.timestamp || 0).getTime();
-  const tb = new Date(b.timestamp || 0).getTime();
-  // Newest first for Unread & Recent; All is already in that order but keep consistent
-  return tb - ta;
-});
-
-  // const [search, setSearch] = useState(''); // (kept above originally)
-
-  // const filtered = conversations.filter(c => {
-  //   if (!search) return true;
-  //   const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
-  //   return hay.includes(search.toLowerCase());
-  // });
+  const finalList = bySearch
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp || 0).getTime() -
+        new Date(a.timestamp || 0).getTime()
+    );
 
   return (
     <View style={styles.container}>
       <View className="topBar" style={styles.topBar}>
         <View>
           <Text style={styles.title}>Messages</Text>
-          <Text style={styles.subtitle}>Connect with verified members</Text>
+          <Text style={styles.subtitle}>
+            Connect with verified members
+          </Text>
         </View>
         <TouchableOpacity>
           <Ionicons name="person-circle" size={36} color="#581845" />
@@ -286,7 +421,12 @@ const finalList = bySearch.slice().sort((a, b) => {
       </View>
 
       <View style={styles.searchContainer}>
-        <Feather name="search" size={20} color="#666" style={{ marginRight: 8 }} />
+        <Feather
+          name="search"
+          size={20}
+          color="#666"
+          style={{ marginRight: 8 }}
+        />
         <TextInput
           placeholder="Search..."
           style={styles.searchInput}
@@ -296,20 +436,30 @@ const finalList = bySearch.slice().sort((a, b) => {
       </View>
 
       <View style={styles.tabsContainer}>
-        {['All', 'Unread', 'Recent'].map(tab => (
+        {['All', 'Unread', 'Recent'].map((tab) => (
           <TouchableOpacity
             key={tab}
-            style={[styles.tabButton, activeTab === tab && styles.activeTab]}
+            style={[
+              styles.tabButton,
+              activeTab === tab && styles.activeTab,
+            ]}
             onPress={() => setActiveTab(tab)}
           >
-            <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === tab && styles.activeTabText,
+              ]}
+            >
+              {tab}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <FlatList
         data={finalList}
-        keyExtractor={item => String(item.userId || item._id)}
+        keyExtractor={(item) => String(item.userId || item._id)}
         renderItem={renderItem}
         contentContainerStyle={{ paddingBottom: 30 }}
       />
@@ -319,32 +469,440 @@ const finalList = bySearch.slice().sort((a, b) => {
 
 export default ChatScreen;
 
-// …styles unchanged
-
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 15 },
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, marginTop: 50 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginTop: 50,
+  },
   title: { fontSize: 24, fontWeight: 'bold', color: '#581845' },
   subtitle: { fontSize: 14, color: '#888', marginTop: 2 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f1f1', paddingHorizontal: 10, borderRadius: 10, marginVertical: 10 },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f1f1',
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    marginVertical: 10,
+  },
   searchInput: { flex: 1, height: 40, fontSize: 16 },
-  tabsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
-  tabButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#eee' },
+  tabsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+  },
+  tabButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#eee',
+  },
   activeTab: { backgroundColor: '#581845' },
   tabText: { fontSize: 14, color: '#444' },
   activeTabText: { color: '#fff', fontWeight: 'bold' },
-  card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fdfdfd', padding: 12, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12, backgroundColor: '#ccc' },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fdfdfd',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    marginRight: 12,
+    backgroundColor: '#ccc',
+  },
   chatDetails: { flex: 1 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   name: { fontSize: 16, fontWeight: 'bold', color: '#222' },
   message: { fontSize: 14, color: '#666', marginTop: 4 },
   school: { fontSize: 12, color: '#aaa', marginTop: 2 },
   timestamp: { fontSize: 12, color: '#aaa' },
-  unreadBadge: { backgroundColor: '#581845', borderRadius: 12, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4 },
+  unreadBadge: {
+    backgroundColor: '#581845',
+    borderRadius: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
   unreadText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// import React, { useEffect, useState, useContext, useCallback } from 'react';
+// import {
+//   View,
+//   Text,
+//   FlatList,
+//   TouchableOpacity,
+//   StyleSheet,
+//   Image,
+//   TextInput
+// } from 'react-native';
+// import axios from 'axios';
+// import moment from 'moment';
+// import { useNavigation } from '@react-navigation/native';
+// import { AuthContext } from '../context/AuthContext';
+// import { Ionicons, Feather } from '@expo/vector-icons';
+// import { socket } from '../socket';
+
+// const ChatScreen = () => {
+//   const [conversations, setConversations] = useState([]);
+
+//   // ✨ Move this ABOVE currentUserId so 'user' exists
+//   const { token, user, setUnreadCount } = useContext(AuthContext);
+
+//   // ✨ Now it's safe to read user
+//   const currentUserId = user?._id || user?.id || null;
+
+//   const navigation = useNavigation();
+//   const [search, setSearch] = useState('');
+//   const [activeTab, setActiveTab] = useState('All');
+
+//   // --- Tab filtering + search + sorting
+// const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
+//   const fetchConversations = useCallback(async () => {
+//     try {
+//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+//         headers: { Authorization: `Bearer ${token}` }
+
+//       });
+//         console.log('Fetching user with token:', token);
+
+//       const fresh = Array.isArray(res.data) ? res.data.slice() : [];
+//       fresh.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
+//       setConversations((prev) => {
+//         const prevMap = new Map(prev.map((c) => [String(c.userId || c._id), c]));
+//         const merged = fresh.map((item) => {
+//           const key = String(item.userId || item._id);
+//           const old = prevMap.get(key);
+//           const unreadCount = Math.max(item.unreadCount || 0, old?.unreadCount || 0);
+//           return { ...item, unreadCount };
+//         });
+//         merged.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+//         return merged;
+//       });
+//     } catch (err) {
+//       console.error('❌ Failed to fetch conversations:', err);
+//     }
+//   }, [token]);
+
+//   useEffect(() => { fetchConversations(); }, [fetchConversations]);
+
+//   // 🔔 Publish total unread to context → Tab badge uses this
+//   useEffect(() => {
+//     // ✨ Fix: add the missing '+' in reduce
+//     const total = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+//     setUnreadCount?.(total);
+//   }, [conversations, setUnreadCount]);
+
+//   // ✅ Listen for messages marked as read (server emits 'message:read')
+//   useEffect(() => {
+//     const onMessageRead = ({ readerId, otherId }) => {
+//       if (!currentUserId) return;
+//       if (String(readerId) !== String(currentUserId)) return;
+//       setConversations(prev =>
+//         prev.map(c =>
+//           String(c.userId || c._id) === String(otherId)
+//             ? { ...c, unreadCount: 0 }
+//             : c
+//         )
+//       );
+//     };
+//     socket.on('message:read', onMessageRead);
+//     return () => socket.off('message:read', onMessageRead);
+//   }, [currentUserId]);
+
+//   // ✅ Listen for conversation:update → update row WITHOUT refetching
+//   useEffect(() => {
+//     if (!currentUserId) return;
+
+//     const onConvUpdate = (payload) => {
+//       if (!payload) return;
+//       const { peerA, peerB, lastMessage, timestamp, unreadBumpFor, unreadResetFor } = payload;
+
+//       const otherUserId = String(peerA) === String(currentUserId)
+//         ? String(peerB)
+//         : String(peerA);
+
+//       setConversations((prev) => {
+//         let found = false;
+
+//         const updated = prev.map((c) => {
+//           if (String(c.userId || c._id) !== otherUserId) return c;
+//           found = true;
+
+//           let unreadCount = c.unreadCount || 0;
+//           if (unreadBumpFor && String(unreadBumpFor) === String(currentUserId)) {
+//             unreadCount = unreadCount + 1;
+//           }
+//           if (unreadResetFor && String(unreadResetFor) === String(currentUserId)) {
+//             unreadCount = 0;
+//           }
+
+//           return {
+//             ...c,
+//             lastMessage: lastMessage ?? c.lastMessage,
+//             timestamp: timestamp ?? c.timestamp,
+//             unreadCount,
+//           };
+//         });
+
+//         const result = found
+//           ? updated
+//           : [
+//               {
+//                 userId: otherUserId,
+//                 firstName: '',
+//                 lastName: '',
+//                 email: '',
+//                 photos: [],
+//                 lastMessage: lastMessage || '',
+//                 timestamp: timestamp || Date.now(),
+//                 unreadCount:
+//                   unreadBumpFor && String(unreadBumpFor) === String(currentUserId) ? 1 : 0,
+//               },
+//               ...updated,
+//             ];
+
+//         result.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+//         return result;
+//       });
+//     };
+
+//     socket.on('conversation:update', onConvUpdate);
+//     return () => socket.off('conversation:update', onConvUpdate);
+//   }, [currentUserId]);
+
+//   useEffect(() => {
+//     const unsubscribe = navigation.addListener('focus', fetchConversations);
+//     return unsubscribe;
+//   }, [navigation, fetchConversations]);
+
+//   const getPhotoUri = (photo) =>
+//     photo
+//       ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+//       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
+
+//   const formatSchoolFromEmail = (email) => {
+//     const raw = email?.split('@')[1]?.split('.')[0];
+//     if (!raw) return 'Unknown';
+//     return raw.replace(/[-_]/g, ' ')
+//               .trim()
+//               .split(/\s+/)
+//               .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+//               .join(' ');
+//   };
+
+// const openDM = async (userObj) => {
+//   const targetId = String(userObj.id || userObj.userId || userObj._id);
+  
+//   // Reset unread count optimistically
+//   setConversations(prev =>
+//     prev.map(c =>
+//       String(c.userId || c._id) === targetId ? { ...c, unreadCount: 0 } : c
+//     )
+//   );
+
+//   try {
+//     const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${targetId}`, {
+//       headers: { Authorization: `Bearer ${token}` },
+//     });
+
+//    const fullUser = res.data.user || res.data;
+// navigation.navigate('PrivateChat', { user: fullUser });
+
+//   } catch (err) {
+//     console.error('❌ Failed to fetch full profile:', err);
+//     // Optional: still navigate with partial data
+//     navigation.navigate('PrivateChat', { user: userObj });
+//   }
+// };
+
+
+
+//   const renderItem = ({ item }) => {
+//     const school = formatSchoolFromEmail(item.email);
+
+//     const userX = {
+//       id: item.userId || item._id,
+//       firstName: item.firstName,
+//       lastName: item.lastName,
+//       nickName: item.nickName,
+//       gender: item.gender,
+//       email: item.email,
+//       bio: item.bio,
+//       photos: item.photos || [],
+     
+      
+//     };
+
+//     const profileUri = getPhotoUri(userX.photos?.[0]);
+
+//     return (
+//       <TouchableOpacity style={styles.card} onPress={() => openDM(userX)}>
+//         <Image source={{ uri: profileUri }} style={styles.avatar} />
+//         <View style={styles.chatDetails}>
+//           <View style={styles.row}>
+//             <Text style={styles.name}>{userX.firstName} {userX.lastName}</Text>
+//             <Text style={styles.timestamp}>{item.timestamp ? moment(item.timestamp).fromNow() : ''}</Text>
+//             {item.unreadCount > 0 && (
+//               <View style={styles.unreadBadge}>
+//                 <Text style={styles.unreadText}>{item.unreadCount}</Text>
+//               </View>
+//             )}
+//           </View>
+//           <Text style={styles.message} numberOfLines={1}>
+//             {item.lastMessage || 'No messages yet.'}
+//           </Text>
+//           <Text style={styles.school}>{school}</Text>
+//         </View>
+//       </TouchableOpacity>
+//     );
+//   };
+
+//   const byTab = conversations.filter((c) => {
+//   if (activeTab === 'Unread') {
+//     return (c.unreadCount || 0) > 0;
+//   }
+//   if (activeTab === 'Recent') {
+//     const t = c.timestamp ? new Date(c.timestamp).getTime() : 0;
+//     return t > 0 && (Date.now() - t) <= RECENT_WINDOW_MS;
+//   }
+//   // 'All'
+//   return true;
+// });
+
+// // Search on top of tab filter
+// const bySearch = byTab.filter((c) => {
+//   if (!search) return true;
+//   const hay = `${c.firstName || ''} ${c.lastName || ''} ${c.email || ''}`.toLowerCase();
+//   return hay.includes(search.toLowerCase());
+// });
+
+// // Sort (explicit for clarity)
+// const finalList = bySearch.slice().sort((a, b) => {
+//   const ta = new Date(a.timestamp || 0).getTime();
+//   const tb = new Date(b.timestamp || 0).getTime();
+//   // Newest first for Unread & Recent; All is already in that order but keep consistent
+//   return tb - ta;
+// });
+
+//   // const [search, setSearch] = useState(''); // (kept above originally)
+
+ 
+
+//   return (
+//     <View style={styles.container}>
+//       <View className="topBar" style={styles.topBar}>
+//         <View>
+//           <Text style={styles.title}>Messages</Text>
+//           <Text style={styles.subtitle}>Connect with verified members</Text>
+//         </View>
+//         <TouchableOpacity>
+//           <Ionicons name="person-circle" size={36} color="#581845" />
+//         </TouchableOpacity>
+//       </View>
+
+//       <View style={styles.searchContainer}>
+//         <Feather name="search" size={20} color="#666" style={{ marginRight: 8 }} />
+//         <TextInput
+//           placeholder="Search..."
+//           style={styles.searchInput}
+//           value={search}
+//           onChangeText={setSearch}
+//         />
+//       </View>
+
+//       <View style={styles.tabsContainer}>
+//         {['All', 'Unread', 'Recent'].map(tab => (
+//           <TouchableOpacity
+//             key={tab}
+//             style={[styles.tabButton, activeTab === tab && styles.activeTab]}
+//             onPress={() => setActiveTab(tab)}
+//           >
+//             <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>{tab}</Text>
+//           </TouchableOpacity>
+//         ))}
+//       </View>
+
+//       <FlatList
+//         data={finalList}
+//         keyExtractor={item => String(item.userId || item._id)}
+//         renderItem={renderItem}
+//         contentContainerStyle={{ paddingBottom: 30 }}
+//       />
+//     </View>
+//   );
+// };
+
+// export default ChatScreen;
+
+// // …styles unchanged
+
+
+// const styles = StyleSheet.create({
+//   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 15 },
+//   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 20, marginTop: 50 },
+//   title: { fontSize: 24, fontWeight: 'bold', color: '#581845' },
+//   subtitle: { fontSize: 14, color: '#888', marginTop: 2 },
+//   searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f1f1f1', paddingHorizontal: 10, borderRadius: 10, marginVertical: 10 },
+//   searchInput: { flex: 1, height: 40, fontSize: 16 },
+//   tabsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 10 },
+//   tabButton: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20, backgroundColor: '#eee' },
+//   activeTab: { backgroundColor: '#581845' },
+//   tabText: { fontSize: 14, color: '#444' },
+//   activeTabText: { color: '#fff', fontWeight: 'bold' },
+//   card: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fdfdfd', padding: 12, borderRadius: 12, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+//   avatar: { width: 48, height: 48, borderRadius: 24, marginRight: 12, backgroundColor: '#ccc' },
+//   chatDetails: { flex: 1 },
+//   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+//   name: { fontSize: 16, fontWeight: 'bold', color: '#222' },
+//   message: { fontSize: 14, color: '#666', marginTop: 4 },
+//   school: { fontSize: 12, color: '#aaa', marginTop: 2 },
+//   timestamp: { fontSize: 12, color: '#aaa' },
+//   unreadBadge: { backgroundColor: '#581845', borderRadius: 12, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start', marginTop: 4 },
+//   unreadText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+// });
 
 
 
@@ -375,7 +933,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('http://192.168.0.169:4000/messages/conversations/list', {
+//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       // sort newest first (helps when socket updates arrive)
@@ -484,7 +1042,7 @@ const styles = StyleSheet.create({
 //   const getPhotoUri = (photo) => {
 //     if (!photo)
 //       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-//     return photo.startsWith('http') ? photo : `http://192.168.0.169:4000${photo}`;
+//     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
 //   };
 
 //   const formatSchoolFromEmail = (email) => {
