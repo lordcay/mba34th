@@ -35,7 +35,7 @@ const universities = [
   { name: 'Boston University', extension: '@bu.edu' },
   { name: 'Cambridge', extension: '@cam.ac.uk' },
   { name: 'Canada West', extension: '@ucanada.ca' },
-  { name: 'Carnegie Mellon', extension: '@cmu.edu' },
+  { name: 'Carnegie Mellon', extension: '@tepper.cmu.edu' },
   { name: 'Chicago Booth', extension: '@chicagobooth.edu' },
   { name: 'Columbia', extension: '@columbia.edu' },
   { name: 'Cornell', extension: '@cornell.edu' },
@@ -72,7 +72,7 @@ const universities = [
   { name: 'Temple', extension: '@temple.edu' },
   { name: 'Tuck', extension: '@tuck.dartmouth.edu' },
   { name: 'UCLA', extension: '@anderson.ucla.edu' },
-  { name: 'UNC', extension: '@unc.edu' },
+  { name: 'UNC', extension: '@kenan-flagler.unc.edu' },
   { name: 'Uni. of California', extension: '@ucdavis.edu' },
   { name: 'Uni. of California', extension: '@uci.edu' },
   { name: 'Uni. of Louisville', extension: '@louisville.edu' },
@@ -205,7 +205,7 @@ const EmailScreen = () => {
 
 
             <View style={styles.formContainer}>
-              \
+              
 
               {/* University Picker */}
               <Text style={styles.label}>Select Your University</Text>

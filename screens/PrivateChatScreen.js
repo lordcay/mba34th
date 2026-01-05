@@ -17,6 +17,7 @@ import {
   Image,
   Keyboard,
   Alert,
+  ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -120,6 +121,8 @@ const [userData, setUserData] = useState(() => normalizeUser(user));
 
   const peer = userData || user || {};
   const peerId = peer?.id || peer?._id;
+  const scrollRef = useRef();
+
 
   const composerBottomPad = kbVisible
     ? 8
@@ -747,7 +750,83 @@ useEffect(() => {
             </Text>
           ) : null}
 
-          <View
+<View
+  style={[
+    styles.composerBar,
+    { paddingBottom: composerBottomPad },
+  ]}
+>
+  <View style={styles.inputWrapper}>
+    <ScrollView
+      ref={scrollRef}
+      onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+      showsVerticalScrollIndicator={false}
+      style={{ maxHeight: 140 }}
+    >
+
+
+      <TextInput
+  ref={inputRef}
+  style={[
+  styles.composerInput,
+  { minHeight: MIN_INPUT_HEIGHT, maxHeight: MAX_INPUT_HEIGHT }
+]}
+
+  // style={[styles.composerInput, { height: inputHeight }]}
+  value={input}
+  onChangeText={setInput}
+  placeholder="Type a message…"
+  placeholderTextColor="#999"
+  multiline
+  textAlignVertical="top"
+  onContentSizeChange={(e) => {
+    if (!e?.nativeEvent?.contentSize) return;   // safety check
+    const height = e.nativeEvent.contentSize.height;
+    setInputHeight(
+      Math.min(MAX_INPUT_HEIGHT, Math.max(MIN_INPUT_HEIGHT, height))
+    );
+  }}
+/>
+
+      {/* <TextInput
+        ref={inputRef}
+        style={styles.composerInput}
+        value={input}
+        onChangeText={setInput}
+        placeholder="Type a message…"
+        placeholderTextColor="#999"
+        multiline
+
+        onContentSizeChange={(e) => {
+  const height = e.nativeEvent.contentSize.height;
+  setInputHeight(Math.min(height, MAX_INPUT_HEIGHT));
+}}
+
+        // onChange={(e) => {
+        //   const height = e.nativeEvent.contentSize.height;
+        //   setInputHeight(Math.min(height, MAX_INPUT_HEIGHT));
+        // }}
+        textAlignVertical="top"
+        autoCorrect
+      /> */}
+    </ScrollView>
+  </View>
+
+  <TouchableOpacity
+    onPress={handleSend}
+    disabled={!input.trim()}
+    style={[
+      styles.sendFab,
+      !input.trim() && { opacity: 0.4 },
+    ]}
+  >
+    <Ionicons name="send" size={18} color="#fff" />
+  </TouchableOpacity>
+</View>
+
+
+
+          {/* <View
             style={[
               styles.composerBar,
               { paddingBottom: composerBottomPad },
@@ -809,7 +888,7 @@ useEffect(() => {
                 color="#fff"
               />
             </TouchableOpacity>
-          </View>
+          </View> */}
         </View>
       </KeyboardAvoidingView>
     </SASafeAreaView>
@@ -843,36 +922,62 @@ const styles = StyleSheet.create({
     marginTop: 5,
     alignSelf: 'flex-end',
   },
-
   composerBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    backgroundColor: '#fff',
-    gap: 8,
-  },
-  inputWrapper: {
-    flex: 1,
-    backgroundColor: '#f5f5f7',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#eee',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    maxHeight: 160,
-  },
-  composerInput: {
-    minHeight: 40,
-    maxHeight: 140,
-    fontSize: 16,
-    lineHeight: 22,
-    padding: 0,
-    color: '#111',
-    includeFontPadding: false,
-  },
+  flexDirection: 'row',
+  alignItems: 'flex-end',
+  paddingHorizontal: 10,
+  paddingTop: 6,
+  paddingBottom: 8,
+  borderTopWidth: 1,
+  borderTopColor: '#eee',
+  backgroundColor: '#fff',
+},
+
+inputWrapper: {
+  flex: 1,
+  backgroundColor: '#f1f1f1',
+  borderRadius: 24,
+  paddingHorizontal: 12,
+  maxHeight: 140,
+},
+
+composerInput: {
+  fontSize: 16,
+  paddingVertical: 8,
+  lineHeight: 22,
+  color: '#111',
+},
+
+
+  // composerBar: {
+  //   flexDirection: 'row',
+  //   alignItems: 'flex-end',
+  //   paddingHorizontal: 10,
+  //   paddingTop: 8,
+  //   borderTopWidth: 1,
+  //   borderTopColor: '#eee',
+  //   backgroundColor: '#fff',
+  //   gap: 8,
+  // },
+  // inputWrapper: {
+  //   flex: 1,
+  //   backgroundColor: '#f5f5f7',
+  //   borderRadius: 22,
+  //   borderWidth: 1,
+  //   borderColor: '#eee',
+  //   paddingHorizontal: 12,
+  //   paddingVertical: 6,
+  //   maxHeight: 160,
+  // },
+  // composerInput: {
+  //   minHeight: 40,
+  //   maxHeight: 140,
+  //   fontSize: 16,
+  //   lineHeight: 22,
+  //   padding: 0,
+  //   color: '#111',
+  //   includeFontPadding: false,
+  // },
   sendFab: {
     backgroundColor: '#581845',
     borderRadius: 22,

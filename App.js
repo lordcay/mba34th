@@ -324,37 +324,6 @@ const WithSocketListener = ({ children }) => {
 
     // ----- Group message -----
 
-//     const onGroupNew = (msg) => {
-//   if (!msg) return;
-
-//   // senderId can be:
-//   // - primitive id (msg.senderId)
-//   // - populated object (msg.senderId._id)
-//   const senderId =
-//     (msg.senderId && (msg.senderId._id || msg.senderId.id || msg.senderId)) || null;
-
-//   // 🚫 if it's my own message, ignore
-//   if (senderId && String(senderId) === String(userId)) return;
-
-//   const senderName =
-//     msg.senderName ||
-//     msg.sender?.firstName ||
-//     (msg.senderId && (msg.senderId.firstName || msg.senderId.name)) ||
-//     'Someone';
-
-//   const groupLabel = msg.chatroomName || 'Group chat';
-//   const preview = (msg.message || '').toString().slice(0, 80);
-
-//   playPing();
-//   showTopToast(`New message in ${groupLabel}`, `${senderName}: ${preview}`);
-
-//   if (AppState.currentState !== 'active') {
-//     scheduleMessageNotification({
-//       title: `New in ${groupLabel}`,
-//       body: `${senderName}: ${preview}`,
-//     }).catch(() => {});
-//   }
-// };
 
 const onGroupNew = (msg) => {
   if (!msg) return;
@@ -429,19 +398,9 @@ useEffect(() => {
 
    const subResponse = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response?.notification?.request?.content?.data || {};
-    // Example: route to the right screen using your navigator
-    // if (data.kind === 'dm' && data.otherUserId) {
-    //   navigationRef.navigate('PrivateChat', { userId: data.otherUserId });
-    // }
-    // if (data.kind === 'group' && data.chatroomId) {
-    //   navigationRef.navigate('ChatRoom', { chatroomId: data.chatroomId, chatroomName: data.groupName });
-    // }
+  
   });
-  // const subResponse = Notifications.addNotificationResponseReceivedListener((_response) => {
-  //   // If you want to navigate to a screen based on data, do it here.
-  //   // const data = _response.notification.request.content.data;
-  //   // e.g. navigate to PrivateChatScreen or ChatRoomScreen
-  // });
+
 
   return () => {
     subReceived?.remove();
@@ -468,13 +427,25 @@ export default function App() {
   }
 
   return (
+  <UnreadProvider>
     <AuthProvider>
-      <UnreadProvider>
       <WithSocketListener>
         <AppNavigator />
         <Toast />
       </WithSocketListener>
-      </UnreadProvider>
     </AuthProvider>
-  );
+  </UnreadProvider>
+);
+
+
+  // return (
+  //   <AuthProvider>
+  //     <UnreadProvider>
+  //     <WithSocketListener>
+  //       <AppNavigator />
+  //       <Toast />
+  //     </WithSocketListener>
+  //     </UnreadProvider>
+  //   </AuthProvider>
+  // );
 }

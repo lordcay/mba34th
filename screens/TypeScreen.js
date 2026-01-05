@@ -146,8 +146,8 @@ const TypeScreen = () => {
                   alignItems: 'center',
                   justifyContent: 'space-between',
                 }}>
-                <Text style={{ fontWeight: '500', fontSize: 15 }}>PHD</Text>
-                <Pressable onPress={() => setType('PHD')}>
+                <Text style={{ fontWeight: '500', fontSize: 15 }}>PhD</Text>
+                <Pressable onPress={() => setType('PhD')}>
                   <FontAwesome
                     name="circle"
                     size={26}

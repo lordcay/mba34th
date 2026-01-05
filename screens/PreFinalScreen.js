@@ -69,35 +69,109 @@ const PreFinalScreen = () => {
   };
 
   const registerUser = async () => {
-    if (!agree) {
-      alert('Please agree to the Terms & Privacy Policy before joining.');
-      return;
+  if (!agree) {
+    alert('Please agree to the Terms & Privacy Policy before joining.');
+    return;
+  }
+
+  if (!userData?.email) {
+    alert('Missing registration details. Please go back and try again.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const payload = {
+      email: userData.email,
+      password: userData.password,
+      firstName: userData.firstName,
+      lastName: userData.lastName,
+      gender: userData.gender,
+      type: userData.type,
+      origin: userData.origin || '',
+      bio: userData.bio || '',
+      interests: userData.interests || [],
+    };
+
+    const res = await axios.post(
+      'https://three4th-street-backend.onrender.com/accounts/register',
+      payload
+    );
+
+    if (res.data.otpSent === false) {
+      alert(
+        "Account created ✅\n\nOTP email couldn't be sent right now. " +
+        "Please tap 'Resend OTP' on the next screen."
+      );
     }
 
-    setLoading(true);
-    try {
-      if (!userData?.email) return;
-      const payload = {
-        email: userData.email,
-        password: userData.password,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        gender: userData.gender,
-        type: userData.type,
-        origin: userData.origin || '',
-        bio: userData.bio || '',
-        interests: userData.interests || [],
-      };
-      const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
-      const { userId } = res.data;
-      navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
-      clearAllScreenData();
-    } catch (err) {
-      console.error('Registration error:', err?.response?.data || err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+    navigation.navigate('VerifyOTPScreen', {
+      userId: res.data.userId,
+      email: res.data.email || userData.email,
+    });
+
+    clearAllScreenData();
+
+  } catch (err) {
+    console.error('Registration error:', {
+      status: err?.response?.status,
+      data: err?.response?.data,
+      message: err?.message,
+    });
+
+    alert(err?.response?.data?.message || 'Registration failed. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+//   const registerUser = async () => {
+//     if (!agree) {
+//       alert('Please agree to the Terms & Privacy Policy before joining.');
+//       return;
+//     }
+
+//     setLoading(true);
+//     try {
+//       if (!userData?.email) return;
+//       const payload = {
+//         email: userData.email,
+//         password: userData.password,
+//         firstName: userData.firstName,
+//         lastName: userData.lastName,
+//         gender: userData.gender,
+//         type: userData.type,
+//         origin: userData.origin || '',
+//         bio: userData.bio || '',
+//         interests: userData.interests || [],
+//       };
+//       const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
+//       if (res.data.otpSent === false) {
+//   alert("Account created ✅. OTP email may be delayed. Please use 'Resend OTP' on the next screen.");
+// }
+//       const { userId } = res.data;
+//       navigation.navigate('VerifyOTPScreen', { userId, email: userData.email });
+//       clearAllScreenData();
+//     }
+
+//     catch (err) {
+//   console.error("Registration error:", {
+//     status: err?.response?.status,
+//     data: err?.response?.data,
+//     message: err?.message
+//   });
+//   alert(err?.response?.data?.message || "Registration failed");
+// }
+
+//     //  catch (err) {
+//     //   console.error('Registration error:', err?.response?.data || err.message);
+//     // }
+//      finally {
+//       setLoading(false);
+//     }
+//   };
 
   if (loading) {
     return (
@@ -146,7 +220,7 @@ const PreFinalScreen = () => {
               onPress={() => Linking.openURL('https://34thstreet.net')}>
               Privacy Policy
             </Text>
-            .
+            
           </Text>
         </View>
 

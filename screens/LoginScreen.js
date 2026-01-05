@@ -272,6 +272,8 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import logo2 from '../assets/logo1.png';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+
 
 
 const LoginScreen = () => {
@@ -282,6 +284,14 @@ const LoginScreen = () => {
   const navigation = useNavigation();
   // const { login } = useContext(AuthContext);
   const { login, checkProfileCompletion } = useContext(AuthContext);
+
+
+  const openSupport = () => {
+  navigation.navigate('SupportWeb', {
+    title: 'Support',
+    url: 'https://34thstreet.net/app-support/',
+  });
+};
 
 
   const signInUser = async () => {
@@ -386,6 +396,14 @@ const LoginScreen = () => {
               <TouchableOpacity onPress={() => navigation.navigate('NameScreen')}>
                 <Text style={styles.registerLink}>Don’t have an account? Register</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity onPress={openSupport} style={styles.supportRow}>
+  <Ionicons name="help-circle-outline" size={18} color="#581845" />
+  <Text style={styles.supportText}>
+    Need help? Visit our Support Center
+  </Text>
+</TouchableOpacity>
+
             </ScrollView>
           </KeyboardAvoidingView>
 
@@ -487,4 +505,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
   },
+  supportRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginTop: 30,
+  gap: 8,
+},
+supportText: {
+  color: '#581845',
+  fontSize: 14,
+  fontWeight: '600',
+  textDecorationLine: 'underline',
+},
+
 });

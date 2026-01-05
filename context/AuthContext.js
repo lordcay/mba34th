@@ -7,6 +7,8 @@ import Toast from 'react-native-toast-message';
 import * as Notifications from 'expo-notifications';
 import { checkProfileCompletion } from '../utils/checkProfileCompletion';
 import { useUnread } from '../context/UnreadContext';
+import { Platform } from 'react-native';
+
 
 const AuthContext = createContext();
 
@@ -232,15 +234,28 @@ const AuthProvider = ({ children }) => {
         setUser,
         unreadCount,
         setUnreadCount,
+        // updateUser: async (newUserData) => {
+        //   try {
+        //     const updatedUser = { ...user, ...newUserData };
+        //     setUser(updatedUser);
+        //     await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+        //   } catch (err) {
+        //     console.error('❌ Failed to update user in context:', err);
+        //   }
+        // },
         updateUser: async (newUserData) => {
-          try {
-            const updatedUser = { ...user, ...newUserData };
-            setUser(updatedUser);
-            await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
-          } catch (err) {
-            console.error('❌ Failed to update user in context:', err);
-          }
-        },
+  try {
+    const incoming = newUserData?.user ?? newUserData; // supports both shapes
+    setUser((prev) => {
+      const updatedUser = { ...(prev || {}), ...(incoming || {}) };
+      AsyncStorage.setItem('user', JSON.stringify(updatedUser)).catch(() => {});
+      return updatedUser;
+    });
+  } catch (err) {
+    console.error('❌ Failed to update user in context:', err);
+  }
+},
+
         checkProfileCompletion,
       }}
     >

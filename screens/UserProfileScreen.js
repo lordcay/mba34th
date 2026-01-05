@@ -551,7 +551,19 @@ const renderReportModal = () => (
                 <Text style={styles.sectionTitle}>Basic Information</Text>
                 <InfoRow label="Nickname" value={user?.nickname || 'N/A'} />
                 <InfoRow label="Gender" value={user?.gender || 'N/A'} />
-                <InfoRow label="Date of Birth" value={user?.DOB?.slice?.(0, 10) || 'N/A'} />
+                {/* <InfoRow label="Date of Birth" value={user?.DOB?.slice?.(0, 10) || 'N/A'} /> */}
+
+                <InfoRow
+  label="Date of Birth"
+  value={
+    user?.DOB
+      ? moment(user.DOB).format("DD MMM") + " 🎉"
+
+      // moment(user.DOB).format("DD MMMM")  // e.g. "12 March"
+      : "N/A"
+  }
+/>
+
                 <InfoRow label="Languages Spoken" value={parseLanguages(user?.languages)} />
                 <InfoRow label="Origin" value={user?.origin || 'N/A'} />
             </View>
@@ -559,7 +571,7 @@ const renderReportModal = () => (
             {/* Academic Info */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Academic Details</Text>
-                <InfoRow label="University" value={school} />
+                <InfoRow label="University" value={school.toUpperCase()} />
                 <InfoRow label="Program of Study" value={user?.fieldOfStudy || 'N/A'} />
                 <InfoRow label="Field of Study" value={user?.type || 'N/A'} />
                 <InfoRow label="Graduation Year" value={user?.graduationYear || 'N/A'} />
