@@ -318,7 +318,7 @@ const handleDeleteAccount = async () => {
 
   useEffect(() => {
     const startYear = 1980;
-    const endYear = 2030;
+    const endYear = 2035;
     const years = [];
 
     for (let year = endYear; year >= startYear; year--) {
@@ -444,14 +444,14 @@ const handleDeleteAccount = async () => {
         phone,
         origin,
         bio,
-        // nickname,
+         nickname,
         DOB: dob,
         dob: dob,
         languages: languages.split(',').map(lang => lang.trim()),
         graduationYear,
         industry: industry.replace(/^[^\w]+ /, ''),
         currentRole,
-        // linkedIn,
+         linkedIn,
         funFact,
         rship,
         fieldOfStudy,

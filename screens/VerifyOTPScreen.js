@@ -94,6 +94,7 @@ const VerifyOTPScreen = () => {
     <View style={styles.container}>
       <Text style={styles.title}>Enter Your Verification Code</Text>
       <Text style={styles.subtitle}>We sent a 6-digit code to {email}</Text>
+      <Text style={styles.subtitle}>Check inbox / junk for OTP</Text>
 
       <TextInput
         style={styles.otpInput}

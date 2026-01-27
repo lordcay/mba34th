@@ -10,6 +10,10 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ChatRoomsListScreen from '../screens/ChatRoomsListScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 
+import FeedScreen from "../screens/FeedScreen";
+// import { Ionicons } from "@expo/vector-icons";
+
+
 import { Ionicons } from '@expo/vector-icons';
 import { View, Text, Animated } from 'react-native';
 import { Audio } from 'expo-av';
@@ -96,6 +100,7 @@ const TabNavigator = () => {
         tabBarIcon: ({ color, size }) => {
           let iconName;
           if (route.name === 'Home') iconName = 'home';
+          else if (route.name === 'Gist') iconName = 'newspaper';
           else if (route.name === 'Chat') iconName = 'chatbubble';
           else if (route.name === 'ChatRooms') iconName = 'chatbubbles';
           else if (route.name === 'Profile') iconName = 'person';
@@ -150,6 +155,8 @@ const TabNavigator = () => {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen name="Gist" component={FeedScreen} />
+
       <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen
         name="ChatRooms"

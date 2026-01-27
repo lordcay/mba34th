@@ -53,7 +53,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
                 email,
             });
 
-            Alert.alert('Success', 'Check your email for reset instructions.');
+            Alert.alert('Success', 'Check your email / junk for reset instructions.');
             setEmail('');
             navigation.navigate('ResetPasswordScreen'); // or wherever you want to take them next
         } catch (error) {
