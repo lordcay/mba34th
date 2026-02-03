@@ -543,9 +543,9 @@ const goToProfile = async (comment) => {
           multiline
           returnKeyType="send"
         />
-        <TouchableOpacity style={styles.iconBtn}>
+        {/* <TouchableOpacity style={styles.iconBtn}>
           <Ionicons name="image-outline" size={20} color="#666" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity style={styles.sendBtn} onPress={addComment}>
           <Ionicons name="send" size={18} color="#fff" />
         </TouchableOpacity>
