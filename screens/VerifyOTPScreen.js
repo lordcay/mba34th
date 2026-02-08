@@ -3,7 +3,19 @@ import { CommonActions, useNavigation, useRoute } from '@react-navigation/native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useContext, useLayoutEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext'; // Ensure this is correctly imported
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
+} from 'react-native';
 import LottieView from 'lottie-react-native';
 
 import axios from 'axios';
@@ -90,26 +102,53 @@ const VerifyOTPScreen = () => {
 
 
 
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Enter Your Verification Code</Text>
-      <Text style={styles.subtitle}>We sent a 6-digit code to {email}</Text>
-      <Text style={styles.subtitle}>Check inbox / junk for OTP</Text>
+ return (
+  <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+  >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.container}>
+          <Text style={styles.title}>Enter Your Verification Code</Text>
 
-      <TextInput
-        style={styles.otpInput}
-        placeholder="Enter OTP"
-        keyboardType="numeric"
-        maxLength={6}
-        value={otp}
-        onChangeText={setOtp}
-      />
+          <Text style={styles.subtitle}>
+            We sent a 6-digit code to {email}
+          </Text>
 
-      <TouchableOpacity onPress={verifyOTP} style={styles.button}>
-        <Text style={styles.buttonText}>Verify</Text>
-      </TouchableOpacity>
-    </View>
-  );
+          <Text style={styles.subtitle}>
+            Check inbox / junk for OTP
+          </Text>
+
+          <TextInput
+            style={styles.otpInput}
+            placeholder="Enter OTP"
+            keyboardType="numeric"
+            maxLength={6}
+            value={otp}
+            onChangeText={setOtp}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+          />
+
+          <TouchableOpacity
+            onPress={verifyOTP}
+            style={styles.button}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.buttonText}>Verify</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </TouchableWithoutFeedback>
+  </KeyboardAvoidingView>
+);
+
 };
 
 export default VerifyOTPScreen;

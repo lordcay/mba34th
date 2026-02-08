@@ -139,8 +139,23 @@ const TypeScreen = () => {
                   />
                 </Pressable>
               </View>
-
               <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                <Text style={{ fontWeight: '500', fontSize: 15 }}>PhD </Text>
+                <Pressable onPress={() => setType('PhD')}>
+                  <FontAwesome
+                    name="circle"
+                    size={26}
+                    color={type == 'PhD' ? '#581845' : '#F0F0F0'}
+                  />
+                </Pressable>
+              </View>
+
+              {/* <View
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
@@ -154,7 +169,7 @@ const TypeScreen = () => {
                     color={type == 'PHD' ? '#581845' : '#F0F0F0'}
                   />
                 </Pressable>
-              </View>
+              </View> */}
               <View
                 style={{
                   flexDirection: 'row',
