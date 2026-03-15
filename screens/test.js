@@ -127,7 +127,7 @@ const EditProfileScreen = ({ navigation }) => {
             };
 
             const res = await axios.put(
-                `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+                `http://192.168.100.4:4000/accounts/${userId}`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );

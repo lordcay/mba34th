@@ -27,7 +27,7 @@ import { AntDesign } from '@expo/vector-icons';
 
 
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const BASE_URL = 'http://192.168.100.4:4000';
 
 const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -801,7 +801,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// const BASE_URL = 'http://192.168.100.4:4000';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -1476,7 +1476,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// const BASE_URL = 'http://192.168.100.4:4000';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 

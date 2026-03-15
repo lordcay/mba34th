@@ -31,7 +31,7 @@ const AuthProvider = ({ children }) => {
       setToken(token);
       setUserId(userId);
 
-      const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+      const res = await axios.get(`http://192.168.100.4:4000/accounts/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -73,7 +73,7 @@ const AuthProvider = ({ children }) => {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
       } else if (storedToken && storedUserId) {
-        const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${storedUserId}`, {
+        const res = await axios.get(`http://192.168.100.4:4000/accounts/${storedUserId}`, {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
 
@@ -299,7 +299,7 @@ export { AuthContext, AuthProvider };
 //       setToken(token);
 //       setUserId(userId);
 
-//       const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+//       const res = await axios.get(`http://192.168.100.4:4000/accounts/${userId}`, {
 //         headers: { Authorization: `Bearer ${token}` },
 //       });
 
@@ -341,7 +341,7 @@ export { AuthContext, AuthProvider };
 //         const parsedUser = JSON.parse(storedUser);
 //         setUser(parsedUser);
 //       } else if (storedToken && storedUserId) {
-//         const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${storedUserId}`, {
+//         const res = await axios.get(`http://192.168.100.4:4000/accounts/${storedUserId}`, {
 //           headers: { Authorization: `Bearer ${storedToken}` },
 //         });
 

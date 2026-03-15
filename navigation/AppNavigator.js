@@ -24,12 +24,19 @@ import TypeScreen from '../screens/TypeScreen';
 import VerifyOTPScreen from '../screens/VerifyOTPScreen';
 import Toast from 'react-native-toast-message';
 import ProfileScreen from '../screens/ProfileScreen';
+import ChatScreen from '../screens/ChatScreen';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import { navigationRef } from './RootNavigation';
 import SupportWebScreen from '../screens/SupportWebScreen';
+import CallScreen from '../screens/CallScreen';
+import SearchScreen from '../screens/SearchScreen';
+import ConnectionRequestsScreen from '../screens/ConnectionRequestsScreen';
+import ChatRoomsListScreen from '../screens/ChatRoomsListScreen';
+import ChatRoomScreen from '../screens/ChatRoomScreen';
+import ConnectionsScreen from '../screens/ConnectionsScreen';
 
 
 
@@ -67,8 +74,16 @@ const AppNavigator = () => {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       {/* ✅ add Home route so reset/navigation can work */}
       <Stack.Screen name="Home" component={TabNavigator} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="ConnectionRequests" component={ConnectionRequestsScreen} />
+      <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
+      <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
+      <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
+      <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   ) : (
     <>
@@ -76,7 +91,14 @@ const AppNavigator = () => {
       <Stack.Screen name="UserProfile" component={UserProfileScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="ConnectionRequests" component={ConnectionRequestsScreen} />
+      <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
+      <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
+      <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
+      <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   )
 ) : (

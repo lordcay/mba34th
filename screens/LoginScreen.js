@@ -48,7 +48,7 @@
 
 //     try {
 //       const response = await axios.post(
-//         'https://three4th-street-backend.onrender.com/accounts/authenticate',
+//         'http://192.168.100.4:4000/accounts/authenticate',
 //         { email: email.trim(), password: password.trim() }
 //       );
 //       const { token, id, user } = response.data;
@@ -304,7 +304,7 @@ const LoginScreen = () => {
 
     try {
       const response = await axios.post(
-        'https://three4th-street-backend.onrender.com/accounts/authenticate',
+        'http://192.168.100.4:4000/accounts/authenticate',
         { email: email.trim(), password: password.trim() }
       );
       const { token, id, user } = response.data;

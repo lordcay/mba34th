@@ -95,7 +95,7 @@ const PreFinalScreen = () => {
     };
 
     const res = await axios.post(
-      'https://three4th-street-backend.onrender.com/accounts/register',
+      'http://192.168.100.4:4000/accounts/register',
       payload
     );
 
@@ -147,7 +147,7 @@ const PreFinalScreen = () => {
 //         bio: userData.bio || '',
 //         interests: userData.interests || [],
 //       };
-//       const res = await axios.post('https://three4th-street-backend.onrender.com/accounts/register', payload);
+//       const res = await axios.post('http://192.168.100.4:4000/accounts/register', payload);
 //       if (res.data.otpSent === false) {
 //   alert("Account created ✅. OTP email may be delayed. Please use 'Resend OTP' on the next screen.");
 // }

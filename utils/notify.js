@@ -16,14 +16,15 @@ export async function playPing() {
   } catch (_) {}
 }
 
-export function showTopToast(text) {
+export function showTopToast(title, body = '') {
+  const text = body ? `${title}\n${body}` : title;
   Toast.show(text, {
     position: 50, // top-ish
     shadow: true,
     backgroundColor: '#111',
     textColor: '#fff',
     opacity: 1,
-    duration: 2000,
+    duration: 2500,
     containerStyle: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 }
   });
 }

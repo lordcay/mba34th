@@ -20,11 +20,15 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthContext } from '../context/AuthContext';
+import { useUnread } from '../context/UnreadContext';
 import api from '../services/api';
+import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus } from '../services/connection.service';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Feather from 'react-native-vector-icons/Feather';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Modal from 'react-native-modal';
+import { socket } from '../socket';
+import { playPing, showTopToast } from '../utils/notify';
+import DrawerContent from '../components/DrawerContent';
 
 const { width: SCREEN_WIDTH, height } = Dimensions.get('window');
 const CARD_MARGIN_H = 20;
@@ -35,12 +39,82 @@ const FallbackImage = require('../assets/fff.jpg');
 
 const HomeScreen = () => {
   const { user } = useContext(AuthContext);
+  const { state: unreadState } = useUnread();
   const [verifiedUsers, setVerifiedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
+
+  // Drawer state
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Get unread DM count for badge
+  const dmUnreadCount = Object.values(unreadState?.dmByUserId || {}).reduce((a, b) => a + b, 0);
+
+  // Map of userId -> connection status for real-time updates from socket
+  const [connectionStatusUpdates, setConnectionStatusUpdates] = useState({});
+  
+  // 🔴 Map of userId -> presence status for real-time online/offline updates
+  const [presenceUpdates, setPresenceUpdates] = useState({});
+
+  // 🔴 Real-time socket listener for connection status updates
+  useEffect(() => {
+    const handleConnectionAccepted = (data) => {
+      console.log('✅ Connection accepted:', data);
+      // Play notification sound
+      playPing();
+      // Show toast notification
+      showTopToast('Connection Accepted! 🎉', `${data.targetName || 'Someone'} accepted your request`);
+      
+      // 🔴 Update connection status for the user who accepted
+      if (data.targetUserId) {
+        setConnectionStatusUpdates(prev => ({
+          ...prev,
+          [data.targetUserId]: 'connected'
+        }));
+      }
+    };
+
+    // 🔴 Handle connection removed - update UI on BOTH sides in real-time
+    const handleConnectionRemoved = (data) => {
+      console.log('🔌 Connection removed:', data);
+      // Update connection status to 'none' for the disconnected user
+      if (data.userId) {
+        setConnectionStatusUpdates(prev => ({
+          ...prev,
+          [data.userId]: 'none'
+        }));
+      }
+    };
+
+    // 🔴 Handle real-time presence updates (online/away/offline)
+    const handlePresenceUpdate = ({ userId, status, lastSeen }) => {
+      console.log('👤 Presence update:', userId, status);
+      setPresenceUpdates(prev => ({
+        ...prev,
+        [userId]: { status, lastSeen }
+      }));
+    };
+
+    socket.on('connection:accepted', handleConnectionAccepted);
+    socket.on('connection:removed', handleConnectionRemoved);
+    socket.on('presence:update', handlePresenceUpdate);
+
+    return () => {
+      socket.off('connection:accepted', handleConnectionAccepted);
+      socket.off('connection:removed', handleConnectionRemoved);
+      socket.off('presence:update', handlePresenceUpdate);
+    };
+  }, []);
+
+  // User profile image
+  const userProfileImage = user?.photos?.[0] 
+    ? (user.photos[0].startsWith('http') 
+        ? user.photos[0] 
+        : `http://192.168.100.4:4000${user.photos[0]}`)
+    : null;
 
 
   // ----------------------------
@@ -184,8 +258,8 @@ const activeFilterCount = Object.values(filters).filter((v) => {
   // useFocusEffect(useCallback(() => { fetchVerifiedUsers(); }, []));
 
   useEffect(() => {
-  fetchVerifiedUsers();
-}, []);
+    fetchVerifiedUsers();
+  }, []);
 
 
   // ----------------------------
@@ -285,105 +359,101 @@ if (sch) schools.add(String(sch).toUpperCase());
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          { paddingBottom: 6, marginTop: 10 },
-        ]}
-      >
-        <Text style={styles.heading}>Meet Verified Members</Text>
+      {/* LinkedIn-style Top Bar */}
+      <View style={styles.topBar}>
+        {/* Profile Avatar - Left (Opens Drawer) */}
+        <TouchableOpacity 
+          style={styles.profileAvatarBtn}
+          onPress={() => setIsDrawerOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Image
+            source={userProfileImage ? { uri: userProfileImage } : FallbackImage}
+            style={styles.profileAvatar}
+          />
+          <View style={styles.onlineIndicator} />
+        </TouchableOpacity>
 
-        {/* Filter Bar */}
-        <View style={styles.filterBar}>
-          <TouchableOpacity
-            style={styles.filterBtn}
-            onPress={() => setShowFilters(true)}
-          >
-            <Ionicons name="options-outline" size={18} color="#581845" />
-            <Text style={styles.filterBtnText}>Filters</Text>
-            {activeFilterCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+        {/* Center - Tappable Search Bar */}
+        <TouchableOpacity 
+          style={styles.searchBarBtn}
+          onPress={() => navigation.navigate('Search')}
+          activeOpacity={0.9}
+        >
+          <Ionicons name="search-outline" size={18} color="#999" />
+          <Text style={styles.searchBarPlaceholder}>Search members...</Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.refreshBtn}
-onPress={() => fetchVerifiedUsers({ silent: true })}
-          >
-            <Ionicons name="refresh-outline" size={18} color="#581845" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Active filter chips */}
-        {activeFilterCount > 0 && (
-          <View style={styles.chipRow}>
-            {filters.name?.trim()?.length > 0 && (
-  <Chip
-    label={`Name: ${filters.name}`}
-    onRemove={() => clearOne('name')}
-  />
-)}
-
-            {filters.sex && (
-              <Chip label={`Sex: ${filters.sex}`} onRemove={() => clearOne('sex')} />
-            )}
-            {filters.country && (
-              <Chip label={`Country: ${filters.country}`} onRemove={() => clearOne('country')} />
-            )}
-            {filters.school && (
-              <Chip label={`School: ${filters.school}`} onRemove={() => clearOne('school')} />
-            )}
-            {filters.industry && (
-              <Chip label={`Industry: ${filters.industry}`} onRemove={() => clearOne('industry')} />
-            )}
-            {filters.program && (
-              <Chip label={`Program: ${filters.program}`} onRemove={() => clearOne('program')} />
-            )}
-
-            <TouchableOpacity onPress={resetFilters} style={styles.clearAllBtn}>
-              <Text style={styles.clearAllText}>Clear all</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Chat Icon - Right */}
+        <TouchableOpacity 
+          style={styles.chatIconBtn}
+          onPress={() => navigation.navigate('Chat')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={26} color="#581845" />
+          {dmUnreadCount > 0 && (
+            <View style={styles.chatBadge}>
+              <Text style={styles.chatBadgeText}>
+                {dmUnreadCount > 99 ? '99+' : dmUnreadCount}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
 
       <FlatList
-        data={filteredUsers}
-        // ✅ IMPORTANT: use _id or id consistently
+        data={verifiedUsers}
         keyExtractor={(item) => String(item._id || item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContainer, { paddingBottom: insets.bottom + 20 }]}
-        renderItem={({ item }) => <UserCard u={item} navigation={navigation} />}
+        renderItem={({ item }) => (
+          <UserCard 
+            u={item} 
+            navigation={navigation} 
+            socketStatusUpdate={connectionStatusUpdates[item._id || item.id]}
+            presenceUpdate={presenceUpdates[item._id || item.id]}
+          />
+        )}
 
         refreshing={refreshing}
-  onRefresh={() => fetchVerifiedUsers({ silent: true })}
+        onRefresh={() => fetchVerifiedUsers({ silent: true })}
   
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Ionicons name="search-outline" size={20} color="#777" />
-            <Text style={styles.emptyTitle}>No matches</Text>
-            <Text style={styles.emptyText}>Try adjusting your filters.</Text>
-            <TouchableOpacity onPress={resetFilters} style={styles.emptyBtn}>
-              <Text style={styles.emptyBtnText}>Reset filters</Text>
-            </TouchableOpacity>
+            <Ionicons name="people-outline" size={48} color="#ccc" />
+            <Text style={styles.emptyTitle}>No members yet</Text>
+            <Text style={styles.emptyText}>Check back later for new members.</Text>
           </View>
         }
       />
 
-      {/* Filter Sheet */}
-      <FilterSheet
-        visible={showFilters}
-        onClose={() => setShowFilters(false)}
-        filters={filters}
-        setFilters={setFilters}
-        search={search}
-        setSearch={setSearch}
-        options={filterOptions}
-        resetFilters={resetFilters}
-      />
+      {/* LinkedIn-style Drawer */}
+      <Modal
+        isVisible={isDrawerOpen}
+        onBackdropPress={() => setIsDrawerOpen(false)}
+        onSwipeComplete={() => setIsDrawerOpen(false)}
+        swipeDirection={['left']}
+        swipeThreshold={50}
+        animationIn="slideInLeft"
+        animationOut="slideOutLeft"
+        animationInTiming={280}
+        animationOutTiming={220}
+        backdropTransitionInTiming={280}
+        backdropTransitionOutTiming={180}
+        backdropOpacity={0.7}
+        style={styles.drawerModal}
+        propagateSwipe={true}
+        useNativeDriverForBackdrop={true}
+        hideModalContentWhileAnimating={true}
+        coverScreen={true}
+        statusBarTranslucent={true}
+        deviceHeight={Dimensions.get('screen').height}
+      >
+        <DrawerContent 
+          onClose={() => setIsDrawerOpen(false)} 
+          navigation={navigation}
+        />
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -597,13 +667,147 @@ const SectionList = ({ title, value, searchValue, onSearch, data, onSelect }) =>
   );
 };
 
-const UserCard = ({ u, navigation }) => {
+const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
+  const { user: currentUser } = useContext(AuthContext);
   const photos = u.photos && u.photos.length > 0 ? u.photos : [null];
   const scrollX = useRef(new Animated.Value(0)).current;
+  
+  // Connection state: 'none' | 'pending' | 'connected'
+  const [connectionStatus, setConnectionStatus] = useState('none');
+  const [loadingStatus, setLoadingStatus] = useState(true);
+  
+  // 🔴 Disconnect confirmation modal state
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  // Fetch real connection status from backend on mount
+  useEffect(() => {
+    const fetchStatus = async () => {
+      try {
+        const targetUserId = u._id || u.id;
+        const status = await getConnectionStatus(targetUserId);
+        // 'received' means they sent us a request, show as 'none' so we can accept from requests screen
+        setConnectionStatus(status === 'received' ? 'none' : status);
+      } catch (error) {
+        console.error('Failed to fetch connection status:', error);
+      } finally {
+        setLoadingStatus(false);
+      }
+    };
+    fetchStatus();
+  }, [u._id, u.id]);
+
+  // 🔴 Listen for real-time socket status updates
+  useEffect(() => {
+    if (socketStatusUpdate) {
+      console.log('🔄 Real-time status update for', u._id || u.id, ':', socketStatusUpdate);
+      setConnectionStatus(socketStatusUpdate);
+    }
+  }, [socketStatusUpdate, u._id, u.id]);
+
+  // 🔴 Get user online status display (real data only, no simulation)
+  const getOnlineStatus = () => {
+    // Use real-time socket update if available, otherwise use API data
+    const status = presenceUpdate?.status || u.onlineStatus || u.status;
+    const lastSeen = presenceUpdate?.lastSeen || u.lastSeen;
+    
+    // 🔴 Use actual status from backend/socket - NO random simulation
+    if (status === 'online') {
+      return { status: 'online', dotColor: '#22c55e', bgColor: 'rgba(0, 0, 0, 0.7)', label: 'Online' };
+    } else if (status === 'away' || status === 'inactive') {
+      return { status: 'away', dotColor: '#f59e0b', bgColor: 'rgba(0, 0, 0, 0.7)', label: 'Away' };
+    }
+    
+    // Default to offline if no status or explicitly offline
+    return { status: 'offline', dotColor: '#9ca3af', bgColor: 'rgba(0, 0, 0, 0.7)', label: 'Offline' };
+  };
+
+  const onlineStatus = getOnlineStatus();
+
+  // Get connection button display based on status
+  const getConnectionDisplay = () => {
+    switch (connectionStatus) {
+      case 'pending':
+        return { 
+          icon: 'hourglass-outline', 
+          label: 'Pending', 
+          color: '#f39c12',
+          activeColor: '#f39c12'
+        };
+      case 'connected':
+        return { 
+          icon: 'checkmark-done', 
+          label: 'Connected', 
+          color: '#581845',
+          activeColor: '#581845'
+        };
+      default: // 'none'
+        return { 
+          icon: 'person-add-outline', 
+          label: 'Connect', 
+          color: '#666',
+          activeColor: '#666'
+        };
+    }
+  };
+
+  const connectionDisplay = getConnectionDisplay();
+
+  const handleConnect = async () => {
+    const targetUserId = u._id || u.id;
+    const previousStatus = connectionStatus;
+    
+    try {
+      if (connectionStatus === 'none') {
+        // Send connection request
+        setConnectionStatus('pending');
+        await sendConnectionRequest(targetUserId);
+        // Target user will receive push notification
+      } else if (connectionStatus === 'pending') {
+        // Cancel pending request
+        setConnectionStatus('none');
+        await cancelConnectionRequest(targetUserId);
+      } else if (connectionStatus === 'connected') {
+        // 🔴 Show disconnect confirmation modal instead of immediate disconnect
+        setShowDisconnectModal(true);
+        return; // Don't proceed, wait for modal confirmation
+      }
+    } catch (error) {
+      // Revert on error
+      setConnectionStatus(previousStatus);
+      console.error('Connection action failed:', error);
+    }
+  };
+
+  // 🔴 Handle confirmed disconnect
+  const handleConfirmDisconnect = async () => {
+    const targetUserId = u._id || u.id;
+    setDisconnecting(true);
+    
+    try {
+      await removeConnection(targetUserId);
+      setConnectionStatus('none');
+      setShowDisconnectModal(false);
+    } catch (error) {
+      console.error('Disconnect failed:', error);
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleProfile = () => {
+    // Navigate to user profile
+    navigation.navigate('UserProfile', { user: u });
+  };
+
+  const handleSend = () => {
+    // Navigate to private chat
+    navigation.navigate('PrivateChat', { user: u });
+  };
 
   const renderSlide = ({ item: photo }) => {
     const uri = photo
-      ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+      ? (photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`)
       : null;
 
     return (
@@ -624,78 +828,116 @@ const UserCard = ({ u, navigation }) => {
 
   return (
     <View style={styles.cardContainer}>
-      <Animated.FlatList
-        data={photos}
-        keyExtractor={(_, idx) => String(idx)}
-        renderItem={renderSlide}
-        horizontal
-        pagingEnabled
-        snapToInterval={CARD_WIDTH}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        disableIntervalMomentum
-        showsHorizontalScrollIndicator={false}
-        bounces={false}
-        nestedScrollEnabled
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: false }
-        )}
-        scrollEventThrottle={16}
-        getItemLayout={(_, index) => ({
-          length: CARD_WIDTH,
-          offset: CARD_WIDTH * index,
-          index,
-        })}
-      />
-
-      {photos.length > 1 && (
-        <View style={styles.dotsContainer}>
-          {photos.map((_, i) => {
-            const inputRange = [(i - 1) * CARD_WIDTH, i * CARD_WIDTH, (i + 1) * CARD_WIDTH];
-            const opacity = scrollX.interpolate({
-              inputRange,
-              outputRange: [0.3, 1, 0.3],
-              extrapolate: 'clamp',
-            });
-            const scale = scrollX.interpolate({
-              inputRange,
-              outputRange: [0.8, 1.2, 0.8],
-              extrapolate: 'clamp',
-            });
-            return (
-              <Animated.View
-                key={i}
-                style={[styles.dot, { opacity, transform: [{ scale }] }]}
-              />
-            );
+      {/* Photo Section with overlay elements */}
+      <View style={styles.photoSection}>
+        <Animated.FlatList
+          data={photos}
+          keyExtractor={(_, idx) => String(idx)}
+          renderItem={renderSlide}
+          horizontal
+          pagingEnabled
+          snapToInterval={CARD_WIDTH}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          disableIntervalMomentum
+          showsHorizontalScrollIndicator={false}
+          bounces={false}
+          nestedScrollEnabled
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+            { useNativeDriver: false }
+          )}
+          scrollEventThrottle={16}
+          getItemLayout={(_, index) => ({
+            length: CARD_WIDTH,
+            offset: CARD_WIDTH * index,
+            index,
           })}
-        </View>
-      )}
+        />
 
-      <View style={styles.buttonsRow}>
-        <TouchableOpacity
-          style={[styles.iconButton]}
-          onPress={() => navigation.navigate('UserProfile', { user: u })}
+        {/* Verified Badge - Top Right of Photo */}
+        <View style={styles.verifiedBadgePhoto}>
+          <Ionicons name="checkmark-circle" size={16} color="#fff" />
+          <Text style={styles.verifiedBadgeText}>Verified</Text>
+        </View>
+
+        {/* Online Status Badge - Top Left of Photo */}
+        <View style={[styles.onlineStatusBadge, { backgroundColor: onlineStatus.bgColor }]}>
+          <View style={[styles.onlineStatusDot, { backgroundColor: onlineStatus.dotColor }]} />
+          <Text style={styles.onlineStatusText}>
+            {onlineStatus.label}
+          </Text>
+        </View>
+
+        {photos.length > 1 && (
+          <View style={styles.dotsContainer}>
+            {photos.map((_, i) => {
+              const inputRange = [(i - 1) * CARD_WIDTH, i * CARD_WIDTH, (i + 1) * CARD_WIDTH];
+              const opacity = scrollX.interpolate({
+                inputRange,
+                outputRange: [0.3, 1, 0.3],
+                extrapolate: 'clamp',
+              });
+              const scale = scrollX.interpolate({
+                inputRange,
+                outputRange: [0.8, 1.2, 0.8],
+                extrapolate: 'clamp',
+              });
+              return (
+                <Animated.View
+                  key={i}
+                  style={[styles.dot, { opacity, transform: [{ scale }] }]}
+                />
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* LinkedIn-style Action Bar - Below Photo */}
+      <View style={styles.actionBar}>
+        <TouchableOpacity 
+          style={styles.actionBtn} 
+          onPress={handleConnect} 
+          activeOpacity={0.7}
+          disabled={loadingStatus}
         >
-          <Feather name="info" size={22} color="#581845" />
-          <Text style={styles.actionText}>Profile</Text>
+          {loadingStatus ? (
+            <ActivityIndicator size={16} color="#666" />
+          ) : (
+            <Ionicons 
+              name={connectionDisplay.icon} 
+              size={20} 
+              color={connectionDisplay.color} 
+            />
+          )}
+          <Text style={[
+            styles.actionLabel, 
+            connectionStatus !== 'none' && { color: connectionDisplay.activeColor }
+          ]}>
+            {loadingStatus ? '...' : connectionDisplay.label}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.iconButton, styles.primaryOutline]}
-          onPress={() => navigation.navigate('PrivateChat', { user: u })}
-        >
-          <Ionicons name="chatbubble-ellipses" size={22} color="#581845" />
-          <Text style={styles.actionText}>Message</Text>
+        <TouchableOpacity style={styles.actionBtn} onPress={handleProfile} activeOpacity={0.7}>
+          <Ionicons name="person-outline" size={20} color="#666" />
+          <Text style={styles.actionLabel}>Profile</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.actionBtn} onPress={handleSend} activeOpacity={0.7}>
+          <Ionicons name="paper-plane-outline" size={20} color="#666" />
+          <Text style={styles.actionLabel}>Message</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.infoBox}>
-        <Text style={styles.name}>
-          {u.firstName} {u.lastName}{' '}
+        {/* Name with extra info */}
+        <View style={styles.nameRow}>
+          <Text style={styles.name}>
+            {u.firstName} {u.lastName}
+          </Text>
           <Text style={styles.extraInfo}>({u.gender}, {u.origin})</Text>
-        </Text>
+        </View>
 
         <Text style={styles.schName}>
           {schoolName.toUpperCase()} ({u.type} '{String(u.graduationYear).slice(-2)}) • {u.industry}
@@ -728,6 +970,66 @@ const UserCard = ({ u, navigation }) => {
           </Text>
         )}
       </View>
+
+      {/* 🔴 Disconnect Confirmation Modal */}
+      <Modal
+        isVisible={showDisconnectModal}
+        onBackdropPress={() => !disconnecting && setShowDisconnectModal(false)}
+        onBackButtonPress={() => !disconnecting && setShowDisconnectModal(false)}
+        backdropOpacity={0.5}
+        animationIn="fadeIn"
+        animationOut="fadeOut"
+        useNativeDriver
+        style={{ margin: 0, justifyContent: 'center', alignItems: 'center' }}
+      >
+        <View style={styles.disconnectModal}>
+          {/* User Avatar */}
+          <View style={styles.disconnectAvatarContainer}>
+            <Image
+              source={
+                u.photos?.[0]
+                  ? { uri: u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.4:4000${u.photos[0]}` }
+                  : FallbackImage
+              }
+              style={styles.disconnectAvatar}
+            />
+            <View style={styles.disconnectIconOverlay}>
+              <Ionicons name="link-outline" size={16} color="#fff" />
+            </View>
+          </View>
+
+          {/* Modal Content */}
+          <Text style={styles.disconnectTitle}>Disconnect from {u.firstName}?</Text>
+          <Text style={styles.disconnectMessage}>
+            You will no longer be connected with {u.firstName} {u.lastName}. To reconnect, you'll need to send a new request.
+          </Text>
+
+          {/* Action Buttons */}
+          <View style={styles.disconnectActions}>
+            <TouchableOpacity
+              style={styles.disconnectCancelBtn}
+              onPress={() => setShowDisconnectModal(false)}
+              disabled={disconnecting}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.disconnectCancelText}>Cancel</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.disconnectConfirmBtn, disconnecting && styles.disconnectBtnDisabled]}
+              onPress={handleConfirmDisconnect}
+              disabled={disconnecting}
+              activeOpacity={0.7}
+            >
+              {disconnecting ? (
+                <ActivityIndicator size={18} color="#fff" />
+              ) : (
+                <Text style={styles.disconnectConfirmText}>Disconnect</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -737,18 +1039,108 @@ export default HomeScreen;
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
 
+  // Drawer Modal - Full screen coverage on both platforms
+  drawerModal: {
+    margin: 0,
+    padding: 0,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-start',
+  },
+
+  // LinkedIn-style Top Bar
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  profileAvatarBtn: {
+    position: 'relative',
+  },
+  profileAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 2,
+    borderColor: '#581845',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  topBarCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  topBarTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#581845',
+    letterSpacing: 0.5,
+  },
+  searchBarBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginHorizontal: 10,
+    gap: 8,
+  },
+  searchBarPlaceholder: {
+    fontSize: 15,
+    color: '#999',
+    flex: 1,
+  },
+  chatIconBtn: {
+    position: 'relative',
+    padding: 6,
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#e74c3c',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  chatBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
   header: {
     paddingHorizontal: 20,
+    paddingTop: 12,
     paddingBottom: 10,
   },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   heading: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#581845',
-    textAlign: 'center',
+    color: '#333',
+    marginBottom: 2,
   },
 
   // Filter bar
@@ -836,44 +1228,128 @@ const styles = StyleSheet.create({
     height: IMAGE_HEIGHT,
   },
 
-  buttonsRow: {
+  photoSection: {
+    position: 'relative',
+  },
+
+  // Verified Badge on Photo
+  verifiedBadgePhoto: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: Platform.OS === 'android' ? 14 : 12,
-    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(88, 24, 69, 0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 4,
+  },
+  verifiedBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Achievement Badge on Photo
+  achievementBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  achievementBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // Online Status Badge
+  onlineStatusBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 8,
+  },
+  onlineStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+  },
+  onlineStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#fff',
+  },
+
+  // LinkedIn-style Action Bar
+  actionBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderColor: '#f0f0f0',
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-    gap: 15,
+    borderTopColor: '#e8e8e8',
   },
-  iconButton: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'center',
+  actionBtn: {
     alignItems: 'center',
-    backgroundColor: '#f9f9f9',
-    paddingVertical: Platform.OS === 'android' ? 12 : 10,
-    borderRadius: 14,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+    justifyContent: 'center',
+    flex: 1,
+    paddingVertical: 4,
   },
-  primaryOutline: {
-    backgroundColor: '#fff0f5',
-    borderWidth: 1,
-    borderColor: '#581845',
+  actionLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#666',
+    marginTop: 2,
   },
-  actionText: { marginLeft: 8, color: '#581845', fontWeight: '600' },
+  actionLabelActive: {
+    color: '#581845',
+  },
+  actionLabelFavorited: {
+    color: '#f39c12',
+  },
+  actionBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  // Name Row with Badges
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 6,
+  },
+  verifiedInline: {
+    marginLeft: 6,
+    marginRight: 4,
+  },
 
   infoBox: {
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === 'android' ? 14 : 10,
   },
-  name: { fontSize: 20, fontWeight: '700', color: '#222', marginBottom: 6 },
+  name: { fontSize: 20, fontWeight: '700', color: '#222' },
   extraInfo: { fontSize: 14, fontWeight: '400', color: '#777' },
   schName: { fontSize: 16, color: '#444', marginBottom: 10 },
   sectionTitle: {
@@ -899,18 +1375,25 @@ const styles = StyleSheet.create({
   error: { fontSize: 14, color: 'red', textAlign: 'center' },
 
   dotsContainer: {
+    position: 'absolute',
+    bottom: 12,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 10,
   },
   dot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#581845',
-    marginHorizontal: 5,
+    backgroundColor: '#fff',
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
 
   // Empty list
@@ -1055,6 +1538,94 @@ const styles = StyleSheet.create({
     backgroundColor: '#581845',
   },
   footerBtnPrimaryText: { color: '#fff', fontWeight: '900' },
+
+  // 🔴 Disconnect Confirmation Modal Styles
+  disconnectModal: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    width: SCREEN_WIDTH - 48,
+    maxWidth: 340,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  disconnectAvatarContainer: {
+    position: 'relative',
+    marginBottom: 16,
+  },
+  disconnectAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: '#f0f0f0',
+  },
+  disconnectIconOverlay: {
+    position: 'absolute',
+    bottom: -4,
+    right: -4,
+    backgroundColor: '#581845',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+  disconnectTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  disconnectMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
+  disconnectActions: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  disconnectCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disconnectCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#666',
+  },
+  disconnectConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: '#dc3545',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disconnectConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  disconnectBtnDisabled: {
+    opacity: 0.7,
+  },
 });
 
 
@@ -1558,7 +2129,7 @@ const styles = StyleSheet.create({
 
 //   const renderSlide = ({ item: photo }) => {
 //     const uri = photo
-//       ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`)
 //       : null;
 
 //     return (

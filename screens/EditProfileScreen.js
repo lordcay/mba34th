@@ -194,7 +194,7 @@ const handleDeleteAccount = async () => {
 
     // IMPORTANT: Your backend should perform irreversible deletion of the account
     // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+    await axios.delete(`http://192.168.100.4:4000/accounts/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
       // If your backend supports soft vs hard deletes, pass a flag:
       params: { hard: true }
@@ -460,7 +460,7 @@ const handleDeleteAccount = async () => {
       };
 
       const res = await axios.put(
-        `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+        `http://192.168.100.4:4000/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -1721,7 +1721,7 @@ headerTitle: {
 
 //     // IMPORTANT: Your backend should perform irreversible deletion of the account
 //     // and associated personal data (or queue it for deletion), then return 200.
-//     await axios.delete(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+//     await axios.delete(`http://192.168.100.4:4000/accounts/${userId}`, {
 //       headers: { Authorization: `Bearer ${token}` },
 //       // If your backend supports soft vs hard deletes, pass a flag:
 //       params: { hard: true }
@@ -1987,7 +1987,7 @@ headerTitle: {
 //       };
 
 //       const res = await axios.put(
-//         `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+//         `http://192.168.100.4:4000/accounts/${userId}`,
 //         payload,
 //         {
 //           headers: {

@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -12,6 +12,12 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "notification": {
+      "icon": "./assets/logo1.png",
+      "color": "#581845",
+      "androidMode": "default",
+      "androidCollapsedTitle": "34th Street"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coredevhub.34thstreet",
@@ -19,9 +25,16 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
-        "NSCameraUsageDescription": "We need camera access so you can take a new profile picture.",
+        "NSCameraUsageDescription": "We need camera access for video calls and profile pictures.",
+        "NSMicrophoneUsageDescription": "We need microphone access for voice and video calls.",
         "LSApplicationQueriesSchemes": [
           "linkedin"
+        ],
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification",
+          "voip",
+          "audio"
         ]
       }
     },
@@ -33,19 +46,47 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "useNextNotificationsApi": true,
+      "permissions": [
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_CONNECT"
+      ]
     },
     "web": {
       "favicon": "./assets/logo1.png"
     },
     "plugins": [
       "expo-font",
-      "expo-notifications",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/logo1.png",
+          "color": "#581845",
+          "sounds": ["./assets/sounds/incoming.wav"],
+          "defaultChannel": "messages",
+          "enableBackgroundRemoteNotifications": true
+        }
+      ],
       [
         "expo-image-picker",
         {
           "photosPermission": "Allow 34thstreet to access your photos so you can upload a profile picture.",
           "cameraPermission": "Allow 34thstreet to access your camera to take a new profile picture."
+        }
+      ],
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Allow 34thstreet to access your camera for video calls.",
+          "microphonePermission": "Allow 34thstreet to access your microphone for voice and video calls."
         }
       ]
     ],

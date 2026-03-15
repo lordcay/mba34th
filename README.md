@@ -60,7 +60,7 @@ CLOUDINARY_CLOUD_NAME=xxx
 CLOUDINARY_API_KEY=xxx
 CLOUDINARY_API_SECRET=xxx
 
-For frontend, make sure to point all API requests to the backend server IP (e.g., https://three4th-street-backend.onrender.com).
+For frontend, make sure to point all API requests to the backend server IP (e.g., http://192.168.100.4:4000).
 
 **Run App
 Backend:**

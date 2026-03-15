@@ -12,12 +12,14 @@ import axios from 'axios';
 import moment from 'moment';
 import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
+import { useUnread } from '../context/UnreadContext';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { socket } from '../socket';
 import api from '../services/api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+const BASE_URL = 'http://192.168.100.4:4000';
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const ChatScreen = () => {
@@ -25,9 +27,11 @@ const ChatScreen = () => {
 
   // pull auth + unread control from context
   const { token, user, setUnreadCount } = useContext(AuthContext);
+  const { state: unreadState, dispatch: unreadDispatch } = useUnread();
   const currentUserId = user?._id || user?.id || null;
 
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
 
@@ -305,7 +309,7 @@ const openDM = async (userObj) => {
 
   if (!targetId) return;
 
-  // Optimistically clear unread count for this conversation
+  // Optimistically clear unread count for this conversation (local state)
   setConversations((prev) =>
     prev.map((c) =>
       String(c.userId || c._id) === targetId
@@ -313,6 +317,9 @@ const openDM = async (userObj) => {
         : c
     )
   );
+
+  // Also clear unread count in UnreadContext (HomeScreen badge sync)
+  unreadDispatch({ type: 'clear-dm', otherUserId: targetId });
 
   try {
     // ✅ Use the same api instance as ChatRoomScreen
@@ -342,6 +349,11 @@ const openDM = async (userObj) => {
 
     const profileUri = getPhotoUri(userX.photos?.[0]);
 
+    // Get unread count from UnreadContext (synced with App.js dm:new listener)
+    const contextUnread = unreadState?.dmByUserId?.[String(userX.id)] || 0;
+    // Use the higher of local or context unread count
+    const displayUnread = Math.max(item.unreadCount || 0, contextUnread);
+
     return (
       <TouchableOpacity
         style={styles.card}
@@ -358,10 +370,10 @@ const openDM = async (userObj) => {
                 ? moment(item.timestamp).fromNow()
                 : ''}
             </Text>
-            {item.unreadCount > 0 && (
+            {displayUnread > 0 && (
               <View style={styles.unreadBadge}>
                 <Text style={styles.unreadText}>
-                  {item.unreadCount}
+                  {displayUnread}
                 </Text>
               </View>
             )}
@@ -378,7 +390,11 @@ const openDM = async (userObj) => {
   // Tab filter
   const byTab = conversations.filter((c) => {
     if (activeTab === 'Unread') {
-      return (c.unreadCount || 0) > 0;
+      // Check both local unreadCount AND UnreadContext
+      const userId = String(c.userId || c._id);
+      const contextUnread = unreadState?.dmByUserId?.[userId] || 0;
+      const displayUnread = Math.max(c.unreadCount || 0, contextUnread);
+      return displayUnread > 0;
     }
     if (activeTab === 'Recent') {
       const t = c.timestamp
@@ -408,16 +424,25 @@ const openDM = async (userObj) => {
 
   return (
     <View style={styles.container}>
-      <View className="topBar" style={styles.topBar}>
-        <View>
+      <View style={[styles.topBar, { marginTop: insets.top + 10 }]}>
+        {/* Back Button */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color="#581845" />
+        </TouchableOpacity>
+
+        <View style={styles.titleContainer}>
           <Text style={styles.title}>Messages</Text>
           <Text style={styles.subtitle}>
             Connect with verified members
           </Text>
         </View>
-        <TouchableOpacity>
-          <Ionicons name="person-circle" size={36} color="#581845" />
-        </TouchableOpacity>
+
+        {/* Spacer to balance layout */}
+        <View style={styles.spacer} />
       </View>
 
       <View style={styles.searchContainer}>
@@ -473,10 +498,23 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 15 },
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 20,
-    marginTop: 50,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f0f3',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  titleContainer: {
+    flex: 1,
+  },
+  spacer: {
+    width: 40,
   },
   title: { fontSize: 24, fontWeight: 'bold', color: '#581845' },
   subtitle: { fontSize: 14, color: '#888', marginTop: 2 },
@@ -601,7 +639,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+//       const res = await axios.get('http://192.168.100.4:4000/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 
 //       });
@@ -720,7 +758,7 @@ const styles = StyleSheet.create({
 
 //   const getPhotoUri = (photo) =>
 //     photo
-//       ? (photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`)
 //       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
 
 //   const formatSchoolFromEmail = (email) => {
@@ -744,7 +782,7 @@ const styles = StyleSheet.create({
 //   );
 
 //   try {
-//     const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${targetId}`, {
+//     const res = await axios.get(`http://192.168.100.4:4000/accounts/${targetId}`, {
 //       headers: { Authorization: `Bearer ${token}` },
 //     });
 
@@ -933,7 +971,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('https://three4th-street-backend.onrender.com/messages/conversations/list', {
+//       const res = await axios.get('http://192.168.100.4:4000/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       // sort newest first (helps when socket updates arrive)
@@ -1042,7 +1080,7 @@ const styles = StyleSheet.create({
 //   const getPhotoUri = (photo) => {
 //     if (!photo)
 //       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-//     return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
+//     return photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`;
 //   };
 
 //   const formatSchoolFromEmail = (email) => {

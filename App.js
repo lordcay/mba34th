@@ -85,6 +85,8 @@ import { showTopToast, playPing } from './utils/notify';
 import { UnreadProvider } from './context/UnreadContext';
 import { navigate } from './navigation/RootNavigation';
 import { useUnread } from './context/UnreadContext';
+import { setupPushNotifications } from './hooks/usePushNotifications';
+import { CallProvider } from './context/CallContext';
 
 
 
@@ -108,7 +110,8 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,      // show system alert if we schedule while app is foreground
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
+    priority: Notifications.AndroidNotificationPriority.MAX,
   }),
 });
 
@@ -116,24 +119,35 @@ async function setupNotificationsOnce() {
   // Ask for permission (iOS); Android just needs channel
   const { status } = await Notifications.requestPermissionsAsync();
   if (Platform.OS === 'android') {
+    // Main messages channel - HIGH importance for heads-up notifications
     await Notifications.setNotificationChannelAsync('messages', {
       name: 'Messages',
-      importance: Notifications.AndroidImportance.HIGH,
+      importance: Notifications.AndroidImportance.MAX,
       sound: 'default',
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#FF231F7C',
+      lightColor: '#581845',
+      enableVibrate: true,
+      enableLights: true,
+      showBadge: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
   }
   return status;
 }
 
 // Schedules a local notification (used if app is background/inactive)
-async function scheduleMessageNotification({ title, body }) {
+async function scheduleMessageNotification({ title, body, data = {} }) {
   await Notifications.scheduleNotificationAsync({
     content: {
       title,
       body,
       sound: 'default',
+      data,
+      // Android specific
+      ...(Platform.OS === 'android' && {
+        channelId: 'messages',
+        priority: 'max',
+      }),
     },
     trigger: null, // fire immediately
   });
@@ -179,18 +193,67 @@ const WithSocketListener = ({ children }) => {
     };
   }, []);
 
+  // ✅ Presence tracking based on app state
+  useEffect(() => {
+    if (!userId) return;
+
+    // 🔴 Track previous state to detect state changes properly
+    let previousState = AppState.currentState;
+
+    const presenceSub = AppState.addEventListener('change', nextState => {
+      console.log('📱 App state change:', previousState, '->', nextState);
+      
+      if (nextState === 'active' && previousState !== 'active') {
+        // App came to foreground - set online
+        console.log('✅ Setting presence: ONLINE');
+        socket.emit('presence:active', userId);
+      } else if ((nextState === 'background' || nextState === 'inactive') && previousState === 'active') {
+        // App went to background - set inactive/away
+        console.log('💤 Setting presence: INACTIVE');
+        socket.emit('presence:inactive', userId);
+      }
+      
+      // Update previous state AFTER processing
+      previousState = nextState;
+    });
+
+    // 🔴 Set online when this effect runs (user just logged in or app opened)
+    if (AppState.currentState === 'active') {
+      console.log('✅ Initial presence: ONLINE');
+      socket.emit('presence:active', userId);
+    }
+
+    return () => {
+      presenceSub.remove();
+    };
+  }, [userId]);
+
+  // ✅ Register push token with backend when user logs in
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Setup push notifications and send token to backend
+    setupPushNotifications().catch((err) => {
+      console.log('Push notification setup error:', err);
+    });
+  }, [userId]);
+
 
   useEffect(() => {
   // 1) User taps a notification while app is foreground/background
   const subResponse = Notifications.addNotificationResponseReceivedListener(resp => {
-    try { openFromPushData(resp?.notification?.request?.content?.data); } catch {}
+    try { 
+      const data = resp?.notification?.request?.content?.data;
+      openFromPushData(data); 
+    } catch {}
   });
 
-  // 2) Notification received while app is foreground (optional toast/sound duplication guard)
+  // 2) Notification received while app is foreground
+  // We let the system show the notification (shouldShowAlert: true above)
+  // but also play our custom sound
   const subReceive = Notifications.addNotificationReceivedListener(notif => {
-    // You can optionally play a sound or ignore because your socket already handled it.
-    // If you want to unify behavior:
-    // const data = notif?.request?.content?.data; openFromPushData(data); // (only navigate on tap usually)
+    // Play sound when notification arrives in foreground
+    playPing();
   });
 
   return () => {
@@ -206,12 +269,24 @@ const WithSocketListener = ({ children }) => {
 
     const onConnect = () => {
       socket.emit('register', userId);
+      // 🔴 Also emit presence:active when socket reconnects (if app is in foreground)
+      if (AppState.currentState === 'active') {
+        socket.emit('presence:active', userId);
+      }
     };
     socket.on('connect', onConnect);
     if (socket.connected) onConnect();
 
+    // ✅ Send activity heartbeat every 2 minutes to maintain online status
+    const activityInterval = setInterval(() => {
+      if (appState.current === 'active') {
+        socket.emit('presence:activity', userId);
+      }
+    }, 2 * 60 * 1000); // 2 minutes
+
     return () => {
       socket.off('connect', onConnect);
+      clearInterval(activityInterval);
     };
   }, [userId]);
 
@@ -227,26 +302,35 @@ const WithSocketListener = ({ children }) => {
   const msg = payload?.message || payload;
   if (!msg) return;
 
-  const senderIdFromMsg = msg.senderId;
-  const senderIdFromWrapper = payload?.sender?.id || payload?.meta?.senderId;
+  const senderIdFromMsg = msg.senderId?._id || msg.senderId?.id || msg.senderId;
+  const senderIdFromWrapper = payload?.sender?.id || payload?.sender?._id || payload?.meta?.senderId;
   const actualSenderId = senderIdFromMsg ?? senderIdFromWrapper;
 
   // 🚫 Do not notify myself
   if (String(actualSenderId) === String(userId)) return;
 
+  // Extract sender name from various possible locations in the payload
   const senderName =
+    // From populated senderId object
+    msg?.senderId?.firstName ||
+    // From sender wrapper object
     payload?.sender?.firstName ||
+    // From meta object
     payload?.meta?.senderName ||
+    // Direct on message
     msg?.senderName ||
+    // Fallback
     'Someone';
 
   const otherUserId =
-    (msg.senderId && String(msg.senderId) !== String(userId)) ? msg.senderId : msg.recipientId;
+    (msg.senderId && String(msg.senderId?._id || msg.senderId) !== String(userId)) 
+      ? (msg.senderId?._id || msg.senderId) 
+      : msg.recipientId;
 
   const preview = (msg?.message || payload?.meta?.preview || '').toString().slice(0, 80);
 
-  // unread++
-  if (otherUserId) dispatch({ type: 'inc-dm', otherUserId });
+  // 🔴 Increment unread count for this sender
+  if (otherUserId) dispatch({ type: 'bump-dm', otherUserId });
 
   // in-app toast + sound
   playPing();
@@ -398,7 +482,8 @@ useEffect(() => {
 
    const subResponse = Notifications.addNotificationResponseReceivedListener((response) => {
     const data = response?.notification?.request?.content?.data || {};
-  
+    // Navigate to the appropriate screen when user taps notification
+    openFromPushData(data);
   });
 
 
@@ -429,10 +514,12 @@ export default function App() {
   return (
   <UnreadProvider>
     <AuthProvider>
-      <WithSocketListener>
-        <AppNavigator />
-        <Toast />
-      </WithSocketListener>
+      <CallProvider>
+        <WithSocketListener>
+          <AppNavigator />
+          <Toast />
+        </WithSocketListener>
+      </CallProvider>
     </AuthProvider>
   </UnreadProvider>
 );

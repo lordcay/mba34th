@@ -2,11 +2,11 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-// const API_BASE_URL = 'https://three4th-street-backend.onrender.com'; // <- replace with your actual base URL
+// const API_BASE_URL = 'http://192.168.100.4:4000'; // <- replace with your actual base URL
 
 const API_BASE_URL = __DEV__
-  ? "https://three4th-street-backend.onrender.com"
-  : "https://three4th-street-backend.onrender.com";
+  ? "http://192.168.100.4:4000"
+  : "http://192.168.100.4:4000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
