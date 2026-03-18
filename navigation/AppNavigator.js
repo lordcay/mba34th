@@ -37,6 +37,7 @@ import ConnectionRequestsScreen from '../screens/ConnectionRequestsScreen';
 import ChatRoomsListScreen from '../screens/ChatRoomsListScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
+import PostDetailScreen from '../screens/PostDetailScreen';
 
 
 
@@ -83,6 +84,7 @@ const AppNavigator = () => {
       <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
       <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   ) : (
@@ -98,6 +100,7 @@ const AppNavigator = () => {
       <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
       <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
+      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   )

@@ -27,6 +27,7 @@ import { Ionicons } from '@expo/vector-icons'; // For image delete icon
 import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 // add this with your other imports
 // import { Linking } from 'react-native';
 
@@ -537,6 +538,7 @@ navigation.reset({
 
 
   return (
+<OnboardingOverlay screenName="EditProfile">
 <SafeAreaView style={styles.container}>
      
     <View style={styles.headerRow}>
@@ -1086,6 +1088,7 @@ navigation.reset({
 
     </ScrollView>
     </SafeAreaView>
+</OnboardingOverlay>
   );
 };
 

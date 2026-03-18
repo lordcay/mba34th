@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useCallback } from 'react';
+import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Image,
   TextInput,
+  Animated,
 } from 'react-native';
 import axios from 'axios';
 import moment from 'moment';
@@ -17,6 +18,9 @@ import { Ionicons, Feather } from '@expo/vector-icons';
 import { socket } from '../socket';
 import api from '../services/api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus, getConnectionCount } from '../services/connection.service';
+import { playPing, showTopToast } from '../utils/notify';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 
 const BASE_URL = 'http://192.168.100.4:4000';
@@ -34,6 +38,10 @@ const ChatScreen = () => {
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState('All');
+
+  // Connection state maps (userId -> status/count)
+  const [connectionStatuses, setConnectionStatuses] = useState({});
+  const [connectionCounts, setConnectionCounts] = useState({});
 
   const fetchConversations = useCallback(async () => {
     try {
@@ -195,6 +203,90 @@ const ChatScreen = () => {
     return unsubscribe;
   }, [navigation, fetchConversations]);
 
+  // Fetch connection statuses & counts for all conversations
+  useEffect(() => {
+    if (conversations.length === 0) return;
+    const fetchAllStatuses = async () => {
+      const statusMap = {};
+      const countMap = {};
+      await Promise.all(
+        conversations.map(async (c) => {
+          const uid = String(c.userId || c._id);
+          try {
+            const [status, count] = await Promise.all([
+              getConnectionStatus(uid),
+              getConnectionCount(uid),
+            ]);
+            statusMap[uid] = status === 'received' ? 'none' : status;
+            countMap[uid] = count;
+          } catch {
+            statusMap[uid] = 'none';
+            countMap[uid] = 0;
+          }
+        })
+      );
+      setConnectionStatuses(statusMap);
+      setConnectionCounts(countMap);
+    };
+    fetchAllStatuses();
+  }, [conversations]);
+
+  // Socket listeners for real-time connection updates
+  useEffect(() => {
+    const handleConnectionAccepted = (data) => {
+      const otherUserId = data?.fromUserId || data?.toUserId || data?.userId || data?.targetUserId;
+      if (otherUserId) {
+        playPing();
+        showTopToast('Connection accepted! 🎉');
+        setConnectionStatuses(prev => ({ ...prev, [otherUserId]: 'connected' }));
+        setConnectionCounts(prev => ({ ...prev, [otherUserId]: (prev[otherUserId] || 0) + 1 }));
+      }
+    };
+    const handleConnectionRemoved = (data) => {
+      const otherUserId = data?.fromUserId || data?.toUserId || data?.userId;
+      if (otherUserId) {
+        setConnectionStatuses(prev => ({ ...prev, [otherUserId]: 'none' }));
+        setConnectionCounts(prev => ({ ...prev, [otherUserId]: Math.max(0, (prev[otherUserId] || 0) - 1) }));
+      }
+    };
+
+    socket.on('connection:accepted', handleConnectionAccepted);
+    socket.on('connection:removed', handleConnectionRemoved);
+
+    return () => {
+      socket.off('connection:accepted', handleConnectionAccepted);
+      socket.off('connection:removed', handleConnectionRemoved);
+    };
+  }, []);
+
+  // Connection handlers
+  const handleConnect = async (targetUser) => {
+    const uid = String(targetUser.id || targetUser.userId || targetUser._id);
+    const currentStatus = connectionStatuses[uid] || 'none';
+    try {
+      if (currentStatus === 'none') {
+        setConnectionStatuses(prev => ({ ...prev, [uid]: 'pending' }));
+        await sendConnectionRequest(uid);
+      } else if (currentStatus === 'pending') {
+        setConnectionStatuses(prev => ({ ...prev, [uid]: 'none' }));
+        await cancelConnectionRequest(uid);
+      }
+    } catch {
+      setConnectionStatuses(prev => ({ ...prev, [uid]: currentStatus }));
+    }
+  };
+
+  const getConnectionDisplay = (status) => {
+    switch (status) {
+      case 'connected':
+        return { icon: 'checkmark-circle', label: 'Connected', color: '#581845' };
+      case 'pending':
+        return { icon: 'time-outline', label: 'Pending', color: '#9a6b8c' };
+      default:
+        return { icon: 'person-add-outline', label: 'Connect', color: '#581845' };
+    }
+  };
+
   const getPhotoUri = (photo) =>
     photo
       ? photo.startsWith('http')
@@ -348,6 +440,10 @@ const openDM = async (userObj) => {
     };
 
     const profileUri = getPhotoUri(userX.photos?.[0]);
+    const uid = String(userX.id);
+    const status = connectionStatuses[uid] || 'none';
+    const count = connectionCounts[uid] || 0;
+    const display = getConnectionDisplay(status);
 
     // Get unread count from UnreadContext (synced with App.js dm:new listener)
     const contextUnread = unreadState?.dmByUserId?.[String(userX.id)] || 0;
@@ -362,26 +458,44 @@ const openDM = async (userObj) => {
         <Image source={{ uri: profileUri }} style={styles.avatar} />
         <View style={styles.chatDetails}>
           <View style={styles.row}>
-            <Text style={styles.name}>
+            <Text style={styles.name} numberOfLines={1}>
               {userX.firstName} {userX.lastName}
             </Text>
-            <Text style={styles.timestamp}>
-              {item.timestamp
-                ? moment(item.timestamp).fromNow()
-                : ''}
-            </Text>
+            {status !== 'connected' && (
+              <TouchableOpacity
+                style={styles.connectIconBtn}
+                onPress={() => handleConnect(userX)}
+                activeOpacity={0.7}
+              >
+                <Ionicons 
+                  name={status === 'pending' ? 'time-outline' : 'person-add'} 
+                  size={18} 
+                  color={status === 'pending' ? '#9a6b8c' : '#581845'} 
+                />
+              </TouchableOpacity>
+            )}
+            {status === 'connected' && (
+              <Ionicons name="checkmark-circle" size={16} color="#581845" style={{ marginLeft: 6 }} />
+            )}
             {displayUnread > 0 && (
               <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>
-                  {displayUnread}
-                </Text>
+                <Text style={styles.unreadText}>{displayUnread}</Text>
               </View>
             )}
+            <Text style={styles.timestamp}>
+              {item.timestamp ? moment(item.timestamp).fromNow() : ''}
+            </Text>
           </View>
           <Text style={styles.message} numberOfLines={1}>
             {item.lastMessage || 'No messages yet.'}
           </Text>
-          <Text style={styles.school}>{school}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.school}>{school}</Text>
+            <View style={styles.connectionInfo}>
+              <Ionicons name="people-outline" size={11} color="#888" />
+              <Text style={styles.connectionCount}>{count}</Text>
+            </View>
+          </View>
         </View>
       </TouchableOpacity>
     );
@@ -423,6 +537,7 @@ const openDM = async (userObj) => {
     );
 
   return (
+    <OnboardingOverlay screenName="Chat">
     <View style={styles.container}>
       <View style={[styles.topBar, { marginTop: insets.top + 10 }]}>
         {/* Back Button */}
@@ -489,6 +604,7 @@ const openDM = async (userObj) => {
         contentContainerStyle={{ paddingBottom: 30 }}
       />
     </View>
+    </OnboardingOverlay>
   );
 };
 
@@ -563,13 +679,31 @@ const styles = StyleSheet.create({
   chatDetails: { flex: 1 },
   row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
   name: { fontSize: 16, fontWeight: 'bold', color: '#222' },
+  connectIconBtn: {
+    marginLeft: 8,
+    padding: 2,
+  },
   message: { fontSize: 14, color: '#666', marginTop: 4 },
-  school: { fontSize: 12, color: '#aaa', marginTop: 2 },
-  timestamp: { fontSize: 12, color: '#aaa' },
+  school: { fontSize: 12, color: '#aaa' },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  connectionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  connectionCount: {
+    fontSize: 11,
+    color: '#888',
+  },
+  timestamp: { fontSize: 11, color: '#aaa', marginLeft: 'auto', paddingLeft: 8 },
   unreadBadge: {
     backgroundColor: '#581845',
     borderRadius: 12,

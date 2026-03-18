@@ -107,6 +107,20 @@ async function createNotificationChannels() {
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
 
+  // Mentions channel for @ mentions in posts and comments
+  await Notifications.setNotificationChannelAsync('mentions', {
+    name: 'Mentions',
+    description: 'Notifications when someone mentions you in posts or comments',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 300, 100, 300],
+    lightColor: '#581845',
+    enableVibrate: true,
+    enableLights: true,
+    showBadge: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+
   console.log('✅ Android notification channels created');
 }
 

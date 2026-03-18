@@ -87,6 +87,7 @@ import { navigate } from './navigation/RootNavigation';
 import { useUnread } from './context/UnreadContext';
 import { setupPushNotifications } from './hooks/usePushNotifications';
 import { CallProvider } from './context/CallContext';
+import { OnboardingProvider } from './context/OnboardingContext';
 
 
 
@@ -102,6 +103,13 @@ function openFromPushData(data) {
 
   if (data.kind === 'group' && data.chatroomId) {
     navigate('ChatRoom', { chatroomId: data.chatroomId, chatroomName: data.chatroomName || 'Group' });
+    return;
+  }
+
+  // Handle mention notifications - navigate to the post
+  if (data.type === 'mention' && data.postId) {
+    navigate('PostDetail', { postId: data.postId });
+    return;
   }
 }
 
@@ -515,10 +523,12 @@ export default function App() {
   <UnreadProvider>
     <AuthProvider>
       <CallProvider>
-        <WithSocketListener>
-          <AppNavigator />
-          <Toast />
-        </WithSocketListener>
+        <OnboardingProvider>
+          <WithSocketListener>
+            <AppNavigator />
+            <Toast />
+          </WithSocketListener>
+        </OnboardingProvider>
       </CallProvider>
     </AuthProvider>
   </UnreadProvider>

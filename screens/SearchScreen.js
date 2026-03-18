@@ -14,6 +14,7 @@ import {
   Keyboard,
   ActivityIndicator,
   Pressable,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -21,6 +22,10 @@ import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus, getConnectionCount } from '../services/connection.service';
+import { socket } from '../socket';
+import { playPing, showTopToast } from '../utils/notify';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const { width: SCREEN_WIDTH, height } = Dimensions.get('window');
 const CARD_MARGIN_H = 16;
@@ -57,6 +62,13 @@ const SearchScreen = ({ route }) => {
   const [recentSearches, setRecentSearches] = useState([]);
   const [showResults, setShowResults] = useState(false);
 
+  // Connection state maps (userId -> status/count)
+  const [connectionStatuses, setConnectionStatuses] = useState({});
+  const [connectionCounts, setConnectionCounts] = useState({});
+  const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+  const [disconnectTarget, setDisconnectTarget] = useState(null);
+  const [disconnecting, setDisconnecting] = useState(false);
+
   // Load users on mount
   useEffect(() => {
     fetchVerifiedUsers();
@@ -91,6 +103,110 @@ const SearchScreen = ({ route }) => {
     const photos = Array.isArray(u.photos) ? u.photos : [];
     const first = photos[0];
     return Boolean(first && String(first).trim().length > 0);
+  };
+
+  // Fetch connection statuses & counts for all loaded users
+  useEffect(() => {
+    if (verifiedUsers.length === 0) return;
+    const fetchAllStatuses = async () => {
+      const statusMap = {};
+      const countMap = {};
+      await Promise.all(
+        verifiedUsers.map(async (u) => {
+          const uid = String(u._id || u.id);
+          try {
+            const [status, count] = await Promise.all([
+              getConnectionStatus(uid),
+              getConnectionCount(uid),
+            ]);
+            statusMap[uid] = status === 'received' ? 'none' : status;
+            countMap[uid] = count;
+          } catch {
+            statusMap[uid] = 'none';
+            countMap[uid] = 0;
+          }
+        })
+      );
+      setConnectionStatuses(statusMap);
+      setConnectionCounts(countMap);
+    };
+    fetchAllStatuses();
+  }, [verifiedUsers]);
+
+  // Socket listeners for real-time connection updates
+  useEffect(() => {
+    const handleConnectionAccepted = (data) => {
+      const otherUserId = data?.fromUserId || data?.toUserId || data?.userId;
+      if (otherUserId) {
+        playPing();
+        showTopToast('Connection accepted! 🎉');
+        setConnectionStatuses(prev => ({ ...prev, [otherUserId]: 'connected' }));
+        setConnectionCounts(prev => ({ ...prev, [otherUserId]: (prev[otherUserId] || 0) + 1 }));
+      }
+    };
+    const handleConnectionRemoved = (data) => {
+      const otherUserId = data?.fromUserId || data?.toUserId || data?.userId;
+      if (otherUserId) {
+        setConnectionStatuses(prev => ({ ...prev, [otherUserId]: 'none' }));
+        setConnectionCounts(prev => ({ ...prev, [otherUserId]: Math.max(0, (prev[otherUserId] || 0) - 1) }));
+      }
+    };
+
+    socket.on('connection:accepted', handleConnectionAccepted);
+    socket.on('connection:removed', handleConnectionRemoved);
+
+    return () => {
+      socket.off('connection:accepted', handleConnectionAccepted);
+      socket.off('connection:removed', handleConnectionRemoved);
+    };
+  }, []);
+
+  // Connection handlers
+  const handleConnect = async (targetUser) => {
+    const uid = String(targetUser._id || targetUser.id);
+    const currentStatus = connectionStatuses[uid] || 'none';
+    try {
+      if (currentStatus === 'none') {
+        setConnectionStatuses(prev => ({ ...prev, [uid]: 'pending' }));
+        await sendConnectionRequest(uid);
+      } else if (currentStatus === 'pending') {
+        setConnectionStatuses(prev => ({ ...prev, [uid]: 'none' }));
+        await cancelConnectionRequest(uid);
+      } else if (currentStatus === 'connected') {
+        setDisconnectTarget(targetUser);
+        setShowDisconnectModal(true);
+      }
+    } catch {
+      setConnectionStatuses(prev => ({ ...prev, [uid]: currentStatus }));
+    }
+  };
+
+  const handleConfirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    const uid = String(disconnectTarget._id || disconnectTarget.id);
+    setDisconnecting(true);
+    try {
+      await removeConnection(uid);
+      setConnectionStatuses(prev => ({ ...prev, [uid]: 'none' }));
+      setConnectionCounts(prev => ({ ...prev, [uid]: Math.max(0, (prev[uid] || 0) - 1) }));
+    } catch (err) {
+      console.error('Failed to disconnect', err);
+    } finally {
+      setDisconnecting(false);
+      setShowDisconnectModal(false);
+      setDisconnectTarget(null);
+    }
+  };
+
+  const getConnectionDisplay = (status) => {
+    switch (status) {
+      case 'connected':
+        return { icon: 'checkmark-circle', label: 'Connected', color: '#581845', bgColor: '#f9f5f8' };
+      case 'pending':
+        return { icon: 'time-outline', label: 'Pending', color: '#9a6b8c', bgColor: '#f9f5f8' };
+      default:
+        return { icon: 'person-add-outline', label: 'Connect', color: '#581845', bgColor: 'transparent' };
+    }
   };
 
   // Recent searches
@@ -311,6 +427,10 @@ const SearchScreen = ({ route }) => {
       : null;
 
     const schoolName = getSchoolName(u.email);
+    const uid = String(u._id || u.id);
+    const status = connectionStatuses[uid] || 'none';
+    const count = connectionCounts[uid] || 0;
+    const display = getConnectionDisplay(status);
 
     return (
       <TouchableOpacity 
@@ -332,14 +452,40 @@ const SearchScreen = ({ route }) => {
           <Text style={styles.resultMeta} numberOfLines={1}>
             {u.industry} • {u.origin}
           </Text>
+          <View style={styles.resultStatsRow}>
+            <Ionicons name="people-outline" size={12} color="#888" />
+            <Text style={styles.resultCountText}>{count}</Text>
+            {status === 'connected' && (
+              <View style={styles.connectedBadge}>
+                <Ionicons name="checkmark-circle" size={12} color="#581845" />
+                <Text style={styles.connectedBadgeText}>Connected</Text>
+              </View>
+            )}
+          </View>
         </View>
-        <TouchableOpacity 
-          style={styles.connectBtn}
-          onPress={() => navigation.navigate('PrivateChat', { user: u })}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chatbubble-outline" size={18} color="#581845" />
-        </TouchableOpacity>
+        <View style={styles.resultActions}>
+          <TouchableOpacity
+            style={[
+              styles.connectActionBtn,
+              status === 'connected' && styles.connectedActionBtn,
+              status === 'pending' && styles.pendingActionBtn
+            ]}
+            onPress={() => handleConnect(u)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={display.icon} size={14} color={status === 'none' ? '#fff' : display.color} />
+            <Text style={[styles.connectBtnText, status !== 'none' && { color: display.color }]}>
+              {status === 'none' ? 'Connect' : status === 'pending' ? 'Pending' : 'Connected'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.messageIconBtn}
+            onPress={() => navigation.navigate('PrivateChat', { user: u })}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="chatbubble-ellipses" size={26} color="#581845" />
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -347,6 +493,7 @@ const SearchScreen = ({ route }) => {
   const showSearchResults = searchQuery.trim().length > 0 || showResults;
 
   return (
+    <OnboardingOverlay screenName="Search">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Search Header */}
       <View style={styles.searchHeader}>
@@ -510,7 +657,52 @@ const SearchScreen = ({ route }) => {
           )}
         </ScrollView>
       )}
+
+      {/* Disconnect Confirmation Modal */}
+      <Modal
+        visible={showDisconnectModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDisconnectModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {disconnectTarget && (
+              <Image
+                source={
+                  disconnectTarget.photos?.[0]
+                    ? { uri: disconnectTarget.photos[0].startsWith('http') ? disconnectTarget.photos[0] : `http://192.168.100.4:4000${disconnectTarget.photos[0]}` }
+                    : FallbackImage
+                }
+                style={styles.modalAvatar}
+              />
+            )}
+            <Text style={styles.modalTitle}>Disconnect</Text>
+            <Text style={styles.modalMessage}>
+              Remove {disconnectTarget?.firstName} from your connections?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setShowDisconnectModal(false); setDisconnectTarget(null); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalConfirmBtn}
+                onPress={handleConfirmDisconnect}
+                disabled={disconnecting}
+              >
+                <Text style={styles.modalConfirmText}>
+                  {disconnecting ? 'Removing...' : 'Remove'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
+    </OnboardingOverlay>
   );
 };
 
@@ -649,6 +841,138 @@ const styles = StyleSheet.create({
     borderColor: '#581845',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Result card actions
+  resultActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  connectActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 18,
+    backgroundColor: '#581845',
+    gap: 4,
+  },
+  connectedActionBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#581845',
+    paddingHorizontal: 8,
+  },
+  pendingActionBtn: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#9a6b8c',
+    paddingHorizontal: 8,
+  },
+  connectBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  messageIconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resultStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  resultCountText: {
+    fontSize: 11,
+    color: '#888',
+    marginRight: 2,
+  },
+  connectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f5f8',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: 4,
+    gap: 3,
+  },
+  connectedBadgeText: {
+    fontSize: 10,
+    color: '#581845',
+    fontWeight: '700',
+  },
+
+  // Disconnect modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    width: SCREEN_WIDTH * 0.8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 8,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#dc3545',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
   },
 
   // Empty State

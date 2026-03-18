@@ -41,6 +41,7 @@ import {
 import { showTopToast, playPing } from '../utils/notify';
 import { useUnread } from '../context/UnreadContext';
 import api from '../services/api';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 // Media sharing imports
 import * as ImagePicker from 'expo-image-picker';
@@ -1923,6 +1924,7 @@ useEffect(() => {
   };
 
   return (
+    <OnboardingOverlay screenName="PrivateChat">
     <SASafeAreaView
       style={styles.container}
       edges={['top', 'left', 'right']}
@@ -2487,6 +2489,7 @@ useEffect(() => {
         </Pressable>
       </Modal>
     </SASafeAreaView>
+    </OnboardingOverlay>
   );
 };
 

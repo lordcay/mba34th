@@ -33,13 +33,14 @@ const postService = {
   /**
    * Create a new post
    */
-  async createPost({ content, images = [], postType = 'text', visibility = 'public', poll = null }) {
+  async createPost({ content, images = [], postType = 'text', visibility = 'public', poll = null, documents = [] }) {
     const response = await api.post('/posts', {
       content,
       images,
       postType,
       visibility,
-      poll
+      poll,
+      documents
     });
     return response.data;
   },
@@ -103,10 +104,42 @@ const postService = {
   },
 
   /**
+   * Reply to a comment
+   */
+  async replyToComment(postId, commentId, text) {
+    const response = await api.post(`/posts/${postId}/comments/${commentId}/reply`, { text });
+    return response.data;
+  },
+
+  /**
+   * Like a reply
+   */
+  async likeReply(postId, commentId, replyIndex) {
+    const response = await api.post(`/posts/${postId}/comments/${commentId}/replies/${replyIndex}/like`);
+    return response.data;
+  },
+
+  /**
    * Share/repost a post
    */
-  async sharePost(postId, content = '') {
-    const response = await api.post(`/posts/${postId}/share`, { content });
+  async sharePost(postId, content = null, visibility = 'public') {
+    const body = { visibility };
+    if (content) body.content = content;
+    const response = await api.post(`/posts/${postId}/share`, body);
+    return response.data;
+  },
+
+  /**
+   * Share post to specific connections with notifications
+   * @param {string} postId - The ID of the post to share
+   * @param {string[]} connectionIds - Array of connection user IDs to share with
+   * @param {string} message - Optional message to send with the share
+   */
+  async shareToConnections(postId, connectionIds, message = '') {
+    const response = await api.post(`/posts/${postId}/share/connections`, {
+      connectionIds,
+      message
+    });
     return response.data;
   },
 
@@ -134,6 +167,35 @@ const postService = {
   async getTrendingHashtags(limit = 10) {
     const response = await api.get('/posts/trending/hashtags', {
       params: { limit }
+    });
+    return response.data;
+  },
+
+  /**
+   * Report a post
+   * @param {string} postId - The ID of the post to report
+   * @param {string} reasonCategory - Category of the report
+   * @param {string} reason - Detailed reason
+   */
+  async reportPost(postId, reasonCategory, reason) {
+    const response = await api.post(`/reports/post/${postId}`, {
+      reasonCategory,
+      reason
+    });
+    return response.data;
+  },
+
+  /**
+   * Report a comment
+   * @param {string} postId - The ID of the post containing the comment
+   * @param {string} commentId - The ID of the comment to report
+   * @param {string} reasonCategory - Category of the report
+   * @param {string} reason - Detailed reason
+   */
+  async reportComment(postId, commentId, reasonCategory, reason) {
+    const response = await api.post(`/reports/post/${postId}/comment/${commentId}`, {
+      reasonCategory,
+      reason
     });
     return response.data;
   }

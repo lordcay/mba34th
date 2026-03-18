@@ -1,7 +1,7 @@
 
 
 // UserProfileScreen.js
-import React, { useEffect, useState, useMemo, useLayoutEffect } from 'react';
+import React, { useEffect, useState, useContext, useMemo, useLayoutEffect } from 'react';
 import {
     View,
     Text,
@@ -23,6 +23,11 @@ import axios from 'axios';
 import { Linking } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { AntDesign } from '@expo/vector-icons';
+import { AuthContext } from '../context/AuthContext';
+import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus, getConnectionCount } from '../services/connection.service';
+import { socket } from '../socket';
+import { playPing, showTopToast } from '../utils/notify';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 
 
@@ -34,9 +39,11 @@ const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ?
 const normalizeUser = (raw) => {
     if (!raw) return null;
     const photos = Array.isArray(raw.photos) ? raw.photos.map(toAbsolute) : [];
+    const userId = raw?.id || raw?._id;
     return {
         ...raw,
-        id: raw?.id || raw?._id,
+        id: userId,
+        _id: userId,
         photos,
     };
 };
@@ -69,10 +76,18 @@ const PlaceholderPhoto = 'https://via.placeholder.com/150';
 const UserProfileScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
+    const { user: currentUser } = useContext(AuthContext);
     const initialUser = normalizeUser(route.params?.user) || {};
     const [user, setUser] = useState(initialUser);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true); // Start with loading true
     const [isBlocked, setIsBlocked] = useState(false);
+
+    // Connection state
+    const [connectionStatus, setConnectionStatus] = useState('none');
+    const [loadingConnectionStatus, setLoadingConnectionStatus] = useState(true);
+    const [showDisconnectModal, setShowDisconnectModal] = useState(false);
+    const [disconnecting, setDisconnecting] = useState(false);
+    const [connectionCount, setConnectionCount] = useState(0);
 const [reportModalVisible, setReportModalVisible] = useState(false);
 const [reportStep, setReportStep] = useState(1);
 const [selectedReason, setSelectedReason] = useState('');
@@ -93,6 +108,120 @@ const reportReasons = [
 
 
 
+    // Fetch connection status and count on mount
+    useEffect(() => {
+        const targetUserId = user?.id || user?._id;
+        if (!targetUserId) return;
+
+        const fetchConnectionStatus = async () => {
+            try {
+                const status = await getConnectionStatus(targetUserId);
+                setConnectionStatus(status === 'received' ? 'none' : status);
+            } catch (error) {
+                console.error('Failed to fetch connection status:', error);
+            } finally {
+                setLoadingConnectionStatus(false);
+            }
+        };
+
+        const fetchConnectionCount = async () => {
+            try {
+                const count = await getConnectionCount(targetUserId);
+                setConnectionCount(count);
+            } catch (error) {
+                console.error('Failed to fetch connection count:', error);
+            }
+        };
+
+        fetchConnectionStatus();
+        fetchConnectionCount();
+    }, [user?.id, user?._id]);
+
+    // Real-time socket listeners for connection updates
+    useEffect(() => {
+        const targetUserId = String(user?.id || user?._id || '');
+
+        const handleConnectionAccepted = (data) => {
+            if (String(data.targetUserId) === targetUserId) {
+                playPing();
+                showTopToast('Connection Accepted! 🎉', `${data.targetName || 'User'} accepted your request`);
+                setConnectionStatus('connected');
+                setConnectionCount(prev => prev + 1);
+            }
+        };
+
+        const handleConnectionRemoved = (data) => {
+            if (String(data.userId) === targetUserId) {
+                setConnectionStatus('none');
+                setConnectionCount(prev => Math.max(0, prev - 1));
+            }
+        };
+
+        // Also listen for any connection change involving this user (for live count)
+        const handleConnectionChanged = (data) => {
+            if (String(data.userId) === targetUserId || String(data.targetUserId) === targetUserId) {
+                getConnectionCount(targetUserId).then(c => setConnectionCount(c)).catch(() => {});
+            }
+        };
+
+        socket.on('connection:accepted', handleConnectionAccepted);
+        socket.on('connection:removed', handleConnectionRemoved);
+        socket.on('connection:changed', handleConnectionChanged);
+
+        return () => {
+            socket.off('connection:accepted', handleConnectionAccepted);
+            socket.off('connection:removed', handleConnectionRemoved);
+            socket.off('connection:changed', handleConnectionChanged);
+        };
+    }, [user?.id, user?._id]);
+
+    const getConnectionDisplay = () => {
+        switch (connectionStatus) {
+            case 'pending':
+                return { icon: 'hourglass-outline', label: 'Pending', color: '#f39c12', bgColor: '#fef3e0' };
+            case 'connected':
+                return { icon: 'checkmark-done', label: 'Connected', color: '#581845', bgColor: '#f0e7ef' };
+            default:
+                return { icon: 'person-add-outline', label: 'Connect', color: '#581845', bgColor: '#581845' };
+        }
+    };
+
+    const handleConnect = async () => {
+        const targetUserId = user?.id || user?._id;
+        const previousStatus = connectionStatus;
+
+        try {
+            if (connectionStatus === 'none') {
+                setConnectionStatus('pending');
+                await sendConnectionRequest(targetUserId);
+            } else if (connectionStatus === 'pending') {
+                setConnectionStatus('none');
+                await cancelConnectionRequest(targetUserId);
+            } else if (connectionStatus === 'connected') {
+                setShowDisconnectModal(true);
+                return;
+            }
+        } catch (error) {
+            setConnectionStatus(previousStatus);
+            console.error('Connection action failed:', error);
+        }
+    };
+
+    const handleConfirmDisconnect = async () => {
+        const targetUserId = user?.id || user?._id;
+        setDisconnecting(true);
+        try {
+            await removeConnection(targetUserId);
+            setConnectionStatus('none');
+            setConnectionCount(prev => Math.max(0, prev - 1));
+            setShowDisconnectModal(false);
+        } catch (error) {
+            console.error('Disconnect failed:', error);
+        } finally {
+            setDisconnecting(false);
+        }
+    };
+
      useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
@@ -111,31 +240,61 @@ const reportReasons = [
     });
   }, [navigation]);
 
-    // If we don't have an email (or other important fields), fetch the full profile by id
+    // Always fetch full profile when screen loads (author data from posts is incomplete)
     useEffect(() => {
-        const maybeFetch = async () => {
-            if (user?.email || !user?.id) return;
+        const fetchFullProfile = async () => {
+            const userId = initialUser?.id || initialUser?._id;
+            if (!userId) {
+                setLoading(false);
+                return;
+            }
+            
             try {
                 setLoading(true);
                 const token = await AsyncStorage.getItem('token');
                 const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-                const res = await axios.get(`${BASE_URL}/accounts/${user.id}`, { headers });
-                setUser(normalizeUser(res.data) || user); // keep old if normalize fails
+                
+                // Try multiple endpoints to get full profile
+                let fullUser = null;
+                try {
+                    const res = await axios.get(`${BASE_URL}/accounts/${userId}`, { headers });
+                    fullUser = res.data?.user || res.data;
+                } catch (e1) {
+                    try {
+                        const res = await axios.get(`${BASE_URL}/accounts/profile/${userId}`, { headers });
+                        fullUser = res.data?.user || res.data;
+                    } catch (e2) {
+                        try {
+                            const res = await axios.get(`${BASE_URL}/accounts/${userId}/profile`, { headers });
+                            fullUser = res.data?.user || res.data;
+                        } catch (e3) {
+                            console.log('All profile fetch attempts failed');
+                        }
+                    }
+                }
+                
+                if (fullUser) {
+                    setUser(normalizeUser(fullUser));
+                }
             } catch (e) {
-                // keep initial user if fetch fails
+                console.log('Profile fetch error:', e?.message);
             } finally {
                 setLoading(false);
             }
         };
-        maybeFetch();
-    }, [user?.id]);
+        
+        fetchFullProfile();
+    }, []);
 
 
     useEffect(() => {
   const checkBlockStatus = async () => {
+    const userId = user?.id || user?._id;
+    if (!userId) return; // Don't check if no valid user ID
+    
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await axios.get(`${BASE_URL}/blocks/status/${user.id}`, {
+      const res = await axios.get(`${BASE_URL}/blocks/status/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setIsBlocked(res.data?.isBlocked || false);
@@ -144,7 +303,7 @@ const reportReasons = [
     }
   };
   checkBlockStatus();
-}, [user.id]);
+}, [user?.id, user?._id]);
 
     const avatar = useMemo(() => {
         if (user?.photos?.length > 0) return user.photos[0];
@@ -293,10 +452,16 @@ const handleReportUser = async () => {
 
 
 const handleBlockUser = async () => {
+  const userId = user?.id || user?._id;
+  if (!userId) {
+    alert('Cannot identify user to block.');
+    return;
+  }
+  
   try {
     const token = await AsyncStorage.getItem('token');
     const res = await axios.post(`${BASE_URL}/blocks`, {
-      blocked: user.id
+      blocked: userId
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -320,10 +485,16 @@ const handleBlockUser = async () => {
 
 
 const handleReportSubmit = async () => {
+const userId = user?.id || user?._id;
+if (!userId) {
+  alert('Cannot identify user to report.');
+  return;
+}
+
 try {
 const token = await AsyncStorage.getItem('token');
 await axios.post(`${BASE_URL}/reports`, {
-reportedUser: user.id,
+reportedUser: userId,
 reason: `${selectedReason} > ${selectedDetail}`,
 comment: reportComment
 }, {
@@ -498,10 +669,19 @@ const renderReportModal = () => (
 );
 
 
-
+    // Show full-screen loading when first loading user profile
+    if (loading && (!user?.email || !user?.firstName)) {
+        return (
+            <View style={[styles.container, { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }]}>
+                <ActivityIndicator size="large" color="#581845" />
+                <Text style={{ marginTop: 16, color: '#666', fontSize: 16 }}>Loading profile...</Text>
+            </View>
+        );
+    }
 
 
     return (
+        <OnboardingOverlay screenName="UserProfile">
         <ScrollView style={styles.container}>
           
             {/* Profile Header */}
@@ -512,10 +692,50 @@ const renderReportModal = () => (
                     {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown User'}
                 </Text>
 
-                <TouchableOpacity style={styles.editBtn} onPress={goToChat}>
-                    <Ionicons name="chatbubble-ellipses-outline" size={20} color="#fff" />
-                    <Text style={styles.editBtnText}> Chat</Text>
-                </TouchableOpacity>
+                {/* Connection count */}
+                <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statNumber}>{connectionCount}</Text>
+                        <Text style={styles.statLabel}>{connectionCount === 1 ? 'Connection' : 'Connections'}</Text>
+                    </View>
+                </View>
+
+                {/* Connection + Chat buttons row */}
+                <View style={styles.profileBtnRow}>
+                    <TouchableOpacity
+                        style={[
+                            styles.connectBtn,
+                            connectionStatus === 'connected' && styles.connectedBtn,
+                            connectionStatus === 'pending' && styles.pendingBtn,
+                        ]}
+                        onPress={handleConnect}
+                        disabled={loadingConnectionStatus}
+                        activeOpacity={0.7}
+                    >
+                        {loadingConnectionStatus ? (
+                            <ActivityIndicator size={16} color="#fff" />
+                        ) : (
+                            <>
+                                <Ionicons
+                                    name={getConnectionDisplay().icon}
+                                    size={18}
+                                    color={connectionStatus === 'none' ? '#fff' : getConnectionDisplay().color}
+                                />
+                                <Text style={[
+                                    styles.connectBtnText,
+                                    connectionStatus !== 'none' && { color: getConnectionDisplay().color },
+                                ]}>
+                                    {getConnectionDisplay().label}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.editBtn} onPress={goToChat}>
+                        <Ionicons name="chatbubble-ellipses-outline" size={18} color="#fff" />
+                        <Text style={styles.editBtnText}> Chat</Text>
+                    </TouchableOpacity>
+                </View>
 
             </View>
 
@@ -648,8 +868,50 @@ onPress={handleBlockUser }
 
 {renderReportModal()}
 
+            {/* Disconnect Confirmation Modal */}
+            <Modal
+                visible={showDisconnectModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => !disconnecting && setShowDisconnectModal(false)}
+            >
+                <View style={styles.disconnectOverlay}>
+                    <View style={styles.disconnectModal}>
+                        <Image
+                            source={{ uri: avatar }}
+                            style={styles.disconnectAvatar}
+                        />
+                        <Text style={styles.disconnectTitle}>Disconnect from {user?.firstName}?</Text>
+                        <Text style={styles.disconnectMessage}>
+                            You will no longer be connected with {user?.firstName} {user?.lastName}. To reconnect, you'll need to send a new request.
+                        </Text>
+                        <View style={styles.disconnectActions}>
+                            <TouchableOpacity
+                                style={styles.disconnectCancelBtn}
+                                onPress={() => setShowDisconnectModal(false)}
+                                disabled={disconnecting}
+                            >
+                                <Text style={styles.disconnectCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.disconnectConfirmBtn, disconnecting && { opacity: 0.6 }]}
+                                onPress={handleConfirmDisconnect}
+                                disabled={disconnecting}
+                            >
+                                {disconnecting ? (
+                                    <ActivityIndicator size={18} color="#fff" />
+                                ) : (
+                                    <Text style={styles.disconnectConfirmText}>Disconnect</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             
         </ScrollView>
+        </OnboardingOverlay>
     );
 };
 
@@ -683,9 +945,126 @@ const styles = StyleSheet.create({
         width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#581845',
     },
     fullName: { fontSize: 22, fontWeight: '600', marginTop: 12, color: '#333' },
+    statsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 14,
+        marginBottom: 4,
+        gap: 24,
+    },
+    statItem: {
+        alignItems: 'center',
+    },
+    statNumber: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#581845',
+    },
+    statLabel: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
+        fontWeight: '500',
+    },
+    profileBtnRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        marginTop: 12,
+    },
+    connectBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#581845',
+        paddingHorizontal: 18,
+        paddingVertical: 9,
+        borderRadius: 20,
+        gap: 6,
+    },
+    connectedBtn: {
+        backgroundColor: '#f0e7ef',
+        borderWidth: 1,
+        borderColor: '#581845',
+    },
+    pendingBtn: {
+        backgroundColor: '#fef3e0',
+        borderWidth: 1,
+        borderColor: '#f39c12',
+    },
+    connectBtnText: {
+        color: '#fff',
+        fontWeight: '600',
+        fontSize: 14,
+    },
     editBtn: {
-        flexDirection: 'row', alignItems: 'center', marginTop: 10,
-        backgroundColor: '#581845', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20,
+        flexDirection: 'row', alignItems: 'center',
+        backgroundColor: '#581845', paddingHorizontal: 18, paddingVertical: 9, borderRadius: 20,
+        gap: 6,
+    },
+    disconnectOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    disconnectModal: {
+        backgroundColor: '#fff',
+        borderRadius: 16,
+        padding: 24,
+        alignItems: 'center',
+        width: '100%',
+        maxWidth: 340,
+    },
+    disconnectAvatar: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        borderWidth: 2,
+        borderColor: '#581845',
+        marginBottom: 12,
+    },
+    disconnectTitle: {
+        fontSize: 17,
+        fontWeight: '700',
+        color: '#222',
+        marginBottom: 8,
+        textAlign: 'center',
+    },
+    disconnectMessage: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 20,
+    },
+    disconnectActions: {
+        flexDirection: 'row',
+        gap: 10,
+        width: '100%',
+    },
+    disconnectCancelBtn: {
+        flex: 1,
+        paddingVertical: 11,
+        borderRadius: 10,
+        backgroundColor: '#f0f0f0',
+        alignItems: 'center',
+    },
+    disconnectCancelText: {
+        fontWeight: '600',
+        color: '#333',
+    },
+    disconnectConfirmBtn: {
+        flex: 1,
+        paddingVertical: 11,
+        borderRadius: 10,
+        backgroundColor: '#dc3545',
+        alignItems: 'center',
+    },
+    disconnectConfirmText: {
+        fontWeight: '600',
+        color: '#fff',
     },
     blockBtn: {
 flexDirection: 'row',
@@ -762,7 +1141,6 @@ borderRadius: 6,
 });
 
 export default UserProfileScreen;
-
 
 
 

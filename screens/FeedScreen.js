@@ -26,6 +26,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AuthContext } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import api from "../services/api";
+import OnboardingOverlay from "../components/OnboardingOverlay";
 
 
 
@@ -372,6 +373,7 @@ const goToProfile = async (comment) => {
   const bottomPad = COMPOSER_HEIGHT + 18; // enough space under list
   const composerBottom = kbHeight > 0 ? kbHeight : 0;
   return (
+  <OnboardingOverlay screenName="Feed">
   <SafeAreaView style={styles.safe}>
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -541,17 +543,18 @@ const goToProfile = async (comment) => {
           placeholderTextColor="#999"
           style={styles.composerInput}
           multiline
-          returnKeyType="send"
+          returnKeyType="message"
         />
         {/* <TouchableOpacity style={styles.iconBtn}>
           <Ionicons name="image-outline" size={20} color="#666" />
         </TouchableOpacity> */}
         <TouchableOpacity style={styles.sendBtn} onPress={addComment}>
-          <Ionicons name="send" size={18} color="#fff" />
+          <Ionicons name="chatbubble-ellipses" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   </SafeAreaView>
+  </OnboardingOverlay>
 );
 
 

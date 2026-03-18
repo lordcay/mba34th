@@ -23,6 +23,7 @@ import {
   cancelConnectionRequest,
   removeConnection,
 } from '../services/connection.service';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BRAND_PURPLE = '#581845';
@@ -245,6 +246,7 @@ const ConnectionsScreen = () => {
     : "No pending requests.\nConnect with members to grow your network!";
 
   return (
+    <OnboardingOverlay screenName="Connections">
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
@@ -341,6 +343,7 @@ const ConnectionsScreen = () => {
         />
       )}
     </SafeAreaView>
+    </OnboardingOverlay>
   );
 };
 

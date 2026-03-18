@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -23,6 +23,7 @@
       "bundleIdentifier": "com.coredevhub.34thstreet",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
+        "NSContactsUsageDescription": "We need access to your contacts to help you find and connect with friends on 34th Street.",
         "NSPhotoLibraryUsageDescription": "We need access to your photos so you can upload a profile picture.",
         "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
         "NSCameraUsageDescription": "We need camera access for video calls and profile pictures.",

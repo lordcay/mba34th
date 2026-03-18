@@ -19,6 +19,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
 import { useUnread } from '../context/UnreadContext';
 import api from '../services/api';
@@ -29,6 +30,7 @@ import Modal from 'react-native-modal';
 import { socket } from '../socket';
 import { playPing, showTopToast } from '../utils/notify';
 import DrawerContent from '../components/DrawerContent';
+import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const { width: SCREEN_WIDTH, height } = Dimensions.get('window');
 const CARD_MARGIN_H = 20;
@@ -58,6 +60,11 @@ const HomeScreen = () => {
   
   // 🔴 Map of userId -> presence status for real-time online/offline updates
   const [presenceUpdates, setPresenceUpdates] = useState({});
+
+  // Scroll to top button
+  const flatListRef = useRef(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  const scrollTopOpacity = useRef(new Animated.Value(0)).current;
 
   // 🔴 Real-time socket listener for connection status updates
   useEffect(() => {
@@ -350,7 +357,40 @@ if (sch) schools.add(String(sch).toUpperCase());
   if (error) {
     return (
       <View style={styles.center}>
+        <Ionicons name="alert-circle-outline" size={60} color="#dc3545" style={{ marginBottom: 16 }} />
         <Text style={styles.error}>{error}</Text>
+        <Text style={{ color: '#666', fontSize: 14, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 }}>
+          This may be due to an expired session. Try refreshing or log out and log back in.
+        </Text>
+        <View style={{ flexDirection: 'row', marginTop: 24, gap: 12 }}>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#581845',
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 8,
+            }}
+            onPress={() => fetchVerifiedUsers()}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>Retry</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#f8f9fa',
+              paddingVertical: 12,
+              paddingHorizontal: 24,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: '#dee2e6',
+            }}
+            onPress={async () => {
+              await AsyncStorage.multiRemove(['token', 'userId', 'user']);
+              navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+            }}
+          >
+            <Text style={{ color: '#581845', fontWeight: '600' }}>Log Out</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -358,6 +398,7 @@ if (sch) schools.add(String(sch).toUpperCase());
   const androidTopPad = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : 0;
 
   return (
+    <OnboardingOverlay screenName="Home">
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* LinkedIn-style Top Bar */}
       <View style={styles.topBar}>
@@ -402,10 +443,29 @@ if (sch) schools.add(String(sch).toUpperCase());
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={verifiedUsers}
         keyExtractor={(item) => String(item._id || item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContainer, { paddingBottom: insets.bottom + 20 }]}
+        onScroll={(e) => {
+          const offsetY = e.nativeEvent.contentOffset.y;
+          if (offsetY > 400 && !showScrollTop) {
+            setShowScrollTop(true);
+            Animated.timing(scrollTopOpacity, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }).start();
+          } else if (offsetY <= 400 && showScrollTop) {
+            Animated.timing(scrollTopOpacity, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => setShowScrollTop(false));
+          }
+        }}
+        scrollEventThrottle={16}
         renderItem={({ item }) => (
           <UserCard 
             u={item} 
@@ -426,6 +486,19 @@ if (sch) schools.add(String(sch).toUpperCase());
           </View>
         }
       />
+
+      {/* Scroll to Top Floating Button */}
+      {showScrollTop && (
+        <Animated.View style={[styles.scrollTopBtn, { opacity: scrollTopOpacity }]}>
+          <TouchableOpacity
+            onPress={() => flatListRef.current?.scrollToOffset({ offset: 0, animated: true })}
+            activeOpacity={0.8}
+            style={styles.scrollTopInner}
+          >
+            <Ionicons name="chevron-up" size={24} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
       {/* LinkedIn-style Drawer */}
       <Modal
@@ -455,6 +528,7 @@ if (sch) schools.add(String(sch).toUpperCase());
         />
       </Modal>
     </SafeAreaView>
+    </OnboardingOverlay>
   );
 };
 
@@ -731,8 +805,8 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         return { 
           icon: 'hourglass-outline', 
           label: 'Pending', 
-          color: '#f39c12',
-          activeColor: '#f39c12'
+          color: '#9a6b8c',
+          activeColor: '#9a6b8c'
         };
       case 'connected':
         return { 
@@ -745,8 +819,8 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         return { 
           icon: 'person-add-outline', 
           label: 'Connect', 
-          color: '#666',
-          activeColor: '#666'
+          color: '#6B4C5A',
+          activeColor: '#6B4C5A'
         };
     }
   };
@@ -920,12 +994,12 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={handleProfile} activeOpacity={0.7}>
-          <Ionicons name="person-outline" size={20} color="#666" />
+          <Ionicons name="person-outline" size={20} color="#6B4C5A" />
           <Text style={styles.actionLabel}>Profile</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionBtn} onPress={handleSend} activeOpacity={0.7}>
-          <Ionicons name="paper-plane-outline" size={20} color="#666" />
+          <Ionicons name="chatbubble-ellipses" size={20} color="#6B4C5A" />
           <Text style={styles.actionLabel}>Message</Text>
         </TouchableOpacity>
       </View>
@@ -1318,7 +1392,7 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 11,
     fontWeight: '500',
-    color: '#666',
+    color: '#6B4C5A',
     marginTop: 2,
   },
   actionLabelActive: {
@@ -1412,6 +1486,27 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   emptyBtnText: { color: '#fff', fontWeight: '800' },
+
+  // Scroll to top button
+  scrollTopBtn: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    zIndex: 100,
+  },
+  scrollTopInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: '#581845',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
 
   // Bottom Sheet modal
   sheetModal: {
