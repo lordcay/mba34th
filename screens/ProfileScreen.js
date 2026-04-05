@@ -1,7 +1,7 @@
 
 
 
-import React, { useContext, useCallback, useState } from 'react';
+import React, { useContext, useCallback, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   FlatList,
   Alert,
 } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import moment from 'moment';
@@ -19,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { RefreshControl } from 'react-native';
 import { Linking } from 'react-native';
+import { refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
 
 
 
@@ -223,6 +225,56 @@ const ProfileScreen = () => {
         <InfoRow label="Languages Spoken" value={parseLanguages(user.languages)} />
         <InfoRow label="Origin" value={user.origin} />
 
+      </View>
+
+      {/* 📍 Location Section */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          <TouchableOpacity 
+            onPress={async () => {
+              try {
+                const hasPermission = await hasLocationPermission();
+                if (!hasPermission) {
+                  const granted = await requestLocationPermission();
+                  if (!granted) {
+                    Alert.alert(
+                      'Location Permission',
+                      'Please enable location permissions in your device settings to update your location.'
+                    );
+                    return;
+                  }
+                }
+                const result = await refreshAndUpdateLocation();
+                if (result) {
+                  updateUser(result);
+                  Alert.alert('Success', 'Your location has been updated!');
+                }
+              } catch (err) {
+                Alert.alert('Error', 'Failed to update location. Please try again.');
+              }
+            }}
+            style={styles.updateLocationBtn}
+          >
+            <Ionicons name="refresh" size={16} color="#581845" />
+            <Text style={styles.updateLocationText}>Update</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.locationCard}>
+          <View style={styles.locationIconContainer}>
+            <Ionicons name="location" size={24} color="#581845" />
+          </View>
+          <View style={styles.locationDetails}>
+            <Text style={styles.locationCityText}>
+              {user?.currentCity || 'Location not set'}
+            </Text>
+            {user?.locationUpdatedAt && (
+              <Text style={styles.locationUpdatedText}>
+                Updated {moment(user.locationUpdatedAt).fromNow()}
+              </Text>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Academic Info */}
@@ -500,6 +552,57 @@ linkText: {
   textAlign: 'right',
   flexWrap: 'wrap', // ensures long text wraps
   lineHeight: 18,
+},
+
+// 📍 Location Section Styles
+sectionHeaderRow: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+updateLocationBtn: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#f7eef5',
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 16,
+  gap: 4,
+},
+updateLocationText: {
+  fontSize: 13,
+  color: '#581845',
+  fontWeight: '600',
+},
+locationCard: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#faf5f9',
+  borderRadius: 12,
+  padding: 14,
+},
+locationIconContainer: {
+  width: 44,
+  height: 44,
+  borderRadius: 22,
+  backgroundColor: '#f0e7ef',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 14,
+},
+locationDetails: {
+  flex: 1,
+},
+locationCityText: {
+  fontSize: 15,
+  fontWeight: '600',
+  color: '#333',
+},
+locationUpdatedText: {
+  fontSize: 12,
+  color: '#888',
+  marginTop: 4,
 },
 
 });

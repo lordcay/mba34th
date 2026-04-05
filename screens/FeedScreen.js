@@ -476,8 +476,8 @@ const goToProfile = async (comment) => {
 
           {/* Comments */}
           <View style={styles.commentsHeader}>
-            <Text style={styles.commentsTitle}>{post.commentsCount} <Ionicons name="chatbubble-ellipses-outline" size={24} color="#666" /> </Text>
-            
+            <Text style={styles.commentsTitle}>{post.commentsCount}</Text>
+            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#666" />
           </View>
           {/* Comments */}
          

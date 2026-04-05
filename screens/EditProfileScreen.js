@@ -10,7 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   Pressable,
-  StatusBar
+  StatusBar,
+  Switch,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Linking, Platform } from 'react-native';
@@ -28,6 +29,7 @@ import { useNavigation } from '@react-navigation/native';
 import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import { setLocationSharingEnabled, refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
 // add this with your other imports
 // import { Linking } from 'react-native';
 
@@ -77,6 +79,10 @@ const EditProfileScreen = ({ navigation }) => {
   const [showOriginPicker, setShowOriginPicker] = useState(false);
   const [showIndustryPicker, setShowIndustryPicker] = useState(false);
   const [industrySearch, setIndustrySearch] = useState('');
+
+  // 📍 Location settings state
+  const [locationSharingOn, setLocationSharingOn] = useState(true);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
 
 
 
@@ -166,6 +172,9 @@ useEffect(() => {
       setRship(user.rship || '');
       setInterests(user.interests || []);
       setPhotos(user.photos || []);
+      
+      // 📍 Initialize location sharing preference
+      setLocationSharingOn(user.locationSharingEnabled !== false);
 
       // Note: You can load user.photos here if needed.
     }
@@ -922,6 +931,95 @@ navigation.reset({
         </View>
       </Modal>
 
+      {/* 📍 Location Settings Section */}
+      <View style={styles.locationSettingsSection}>
+        <Text style={styles.sectionHeader}>Location Settings</Text>
+        
+        {/* Current Location */}
+        <View style={styles.locationPreviewRow}>
+          <View style={styles.locationIconCircle}>
+            <Ionicons name="location" size={20} color="#581845" />
+          </View>
+          <View style={styles.locationTextContainer}>
+            <Text style={styles.locationCityLabel}>
+              {user?.currentCity || 'Location not set'}
+            </Text>
+            {user?.locationUpdatedAt && (
+              <Text style={styles.locationTimeLabel}>
+                Last updated: {new Date(user.locationUpdatedAt).toLocaleDateString()}
+              </Text>
+            )}
+          </View>
+          <TouchableOpacity 
+            style={styles.refreshLocationBtn}
+            onPress={async () => {
+              try {
+                setUpdatingLocation(true);
+                const hasPermission = await hasLocationPermission();
+                if (!hasPermission) {
+                  const granted = await requestLocationPermission();
+                  if (!granted) {
+                    Alert.alert(
+                      'Permission Required',
+                      'Location permission is needed to update your location.'
+                    );
+                    return;
+                  }
+                }
+                const result = await refreshAndUpdateLocation();
+                if (result) {
+                  updateUser(result);
+                  Toast.show({
+                    type: 'success',
+                    text1: 'Location Updated',
+                    text2: result.currentCity || 'Your location has been refreshed',
+                  });
+                }
+              } catch (err) {
+                Alert.alert('Error', 'Failed to update location');
+              } finally {
+                setUpdatingLocation(false);
+              }
+            }}
+            disabled={updatingLocation}
+          >
+            {updatingLocation ? (
+              <ActivityIndicator size={16} color="#581845" />
+            ) : (
+              <Ionicons name="refresh" size={18} color="#581845" />
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Location Sharing Toggle */}
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleTextContainer}>
+            <Text style={styles.toggleLabel}>Show Distance to Others</Text>
+            <Text style={styles.toggleDescription}>
+              When enabled, other users will see how far away you are
+            </Text>
+          </View>
+          <Switch
+            value={locationSharingOn}
+            onValueChange={async (value) => {
+              setLocationSharingOn(value);
+              try {
+                const result = await setLocationSharingEnabled(value);
+                if (result?.user) {
+                  updateUser(result.user);
+                }
+              } catch (err) {
+                // Revert on error
+                setLocationSharingOn(!value);
+                Alert.alert('Error', 'Failed to update setting');
+              }
+            }}
+            trackColor={{ false: '#ddd', true: '#f0e7ef' }}
+            thumbColor={locationSharingOn ? '#581845' : '#999'}
+          />
+        </View>
+      </View>
+
 
 
 
@@ -1532,7 +1630,80 @@ headerTitle: {
     color: '#333',
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#eee',
-  }
+  },
+
+  // 📍 Location Settings Styles
+  locationSettingsSection: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+  },
+  sectionHeader: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#222',
+    marginBottom: 16,
+  },
+  locationPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#faf5f9',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 16,
+  },
+  locationIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0e7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  locationTextContainer: {
+    flex: 1,
+  },
+  locationCityLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  locationTimeLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  refreshLocationBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0e7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 12,
+    padding: 14,
+  },
+  toggleTextContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  toggleDescription: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+  },
 
 
 

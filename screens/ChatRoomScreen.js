@@ -1552,6 +1552,11 @@ useEffect(() => {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  
   // WhatsApp-style message wrapper
   messageWrapper: {
     marginBottom: 2,

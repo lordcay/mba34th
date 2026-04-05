@@ -865,7 +865,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
   const getConnectionImage = (connection) => {
     const img = connection?.profileImage || connection?.photos?.[0];
     if (!img) return null;
-    return img.startsWith('http') ? img : `https://three4th-street-backend.onrender.com${img}`;
+    return img.startsWith('http') ? img : `http://192.168.100.4:4000${img}`;
   };
 
   return (

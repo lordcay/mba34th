@@ -24,6 +24,7 @@ import { AuthContext } from '../context/AuthContext';
 import { useUnread } from '../context/UnreadContext';
 import api from '../services/api';
 import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus } from '../services/connection.service';
+import { refreshAndUpdateLocation, shouldRefreshLocation, formatDistance } from '../services/location.service';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import Modal from 'react-native-modal';
@@ -190,6 +191,17 @@ const activeFilterCount = Object.values(filters).filter((v) => {
   .filter((u) => String(u._id || u.id) !== myId)
   .filter(hasProfilePhoto); // ✅ remove users without profile photo
 
+    // 📍 Debug: Log location data from API
+    console.log('📍 Users with location data:', 
+      filtered.map(u => ({
+        name: u.firstName,
+        currentCity: u.currentCity,
+        distance: u.distance,
+        locationSharingEnabled: u.locationSharingEnabled,
+        hasCoords: !!(u.location?.coordinates?.length)
+      }))
+    );
+
     // const filtered = (Array.isArray(response.data) ? response.data : [])
     //   .filter((u) => String(u._id || u.id) !== myId);
 
@@ -266,6 +278,30 @@ const activeFilterCount = Object.values(filters).filter((v) => {
 
   useEffect(() => {
     fetchVerifiedUsers();
+    
+    // 📍 Update location on app open (Tinder-style auto location update)
+    const updateLocation = async () => {
+      try {
+        const needsRefresh = await shouldRefreshLocation();
+        console.log('📍 Location needs refresh:', needsRefresh, 'Platform:', Platform.OS);
+        
+        if (needsRefresh) {
+          const result = await refreshAndUpdateLocation();
+          console.log('📍 Location update result:', result ? 'Success' : 'Failed');
+          
+          // Re-fetch users after location update so distances are calculated
+          if (result) {
+            fetchVerifiedUsers({ silent: true });
+          }
+        }
+      } catch (err) {
+        console.log('📍 Location update skipped:', err?.message);
+      }
+    };
+    
+    // Slight delay for Android to ensure permissions dialog doesn't interfere
+    const timeoutId = setTimeout(updateLocation, Platform.OS === 'android' ? 1500 : 500);
+    return () => clearTimeout(timeoutId);
   }, []);
 
 
@@ -929,11 +965,17 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
           })}
         />
 
-        {/* Verified Badge - Top Right of Photo */}
-        <View style={styles.verifiedBadgePhoto}>
-          <Ionicons name="checkmark-circle" size={16} color="#fff" />
-          <Text style={styles.verifiedBadgeText}>Verified</Text>
-        </View>
+        {/* 📍 Location Badge - Top Right of Photo (Compact Design) */}
+        {(u.currentCity || (u.distance !== null && u.distance !== undefined)) && u.locationSharingEnabled !== false ? (
+          <View style={styles.locationBadgePhoto}>
+            <Ionicons name="location" size={10} color="#fff" />
+            <Text style={styles.locationBadgeText} numberOfLines={1}>
+              {u.distance !== null && u.distance !== undefined 
+                ? (u.distanceDisplay || formatDistance(u.distance))
+                : u.currentCity}
+            </Text>
+          </View>
+        ) : null}
 
         {/* Online Status Badge - Top Left of Photo */}
         <View style={[styles.onlineStatusBadge, { backgroundColor: onlineStatus.bgColor }]}>
@@ -1038,11 +1080,7 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
           </>
         )}
 
-        {!!u.location && (
-          <Text style={styles.location}>
-            <Ionicons name="location-sharp" size={16} color="#581845" /> {u.location}
-          </Text>
-        )}
+        {/* Location info now shown on photo badge - removed from here for cleaner design */}
       </View>
 
       {/* 🔴 Disconnect Confirmation Modal */}
@@ -1306,23 +1344,24 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
 
-  // Verified Badge on Photo
-  verifiedBadgePhoto: {
+  // 📍 Location Badge on Photo (Compact Design - matches online status)
+  locationBadgePhoto: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 10,
+    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(88, 24, 69, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
     gap: 4,
+    maxWidth: '45%',
   },
-  verifiedBadgeText: {
+  locationBadgeText: {
     color: '#fff',
-    fontSize: 11,
-    fontWeight: '700',
+    fontSize: 10,
+    fontWeight: '600',
   },
 
   // Achievement Badge on Photo
@@ -1445,6 +1484,47 @@ const styles = StyleSheet.create({
     lineHeight: Platform.OS === 'android' ? 22 : 20,
   },
   location: { fontSize: 14, color: '#555', marginTop: 10 },
+
+  // 📍 Location Container Styles - Modern Tinder-inspired Design
+  locationContainer: {
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  locationIconWrapper: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f7eef5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationCity: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  locationDistance: {
+    fontSize: 13,
+    color: '#581845',
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  locationHidden: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
 
   error: { fontSize: 14, color: 'red', textAlign: 'center' },
 

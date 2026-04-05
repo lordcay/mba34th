@@ -38,6 +38,8 @@ import ChatRoomsListScreen from '../screens/ChatRoomsListScreen';
 import ChatRoomScreen from '../screens/ChatRoomScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
+import CreateEventScreen from '../screens/CreateEventScreen';
+import EventDetailScreen from '../screens/EventDetailScreen';
 
 
 
@@ -85,6 +87,8 @@ const AppNavigator = () => {
       <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+      <Stack.Screen name="EventDetail" component={EventDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   ) : (
@@ -101,6 +105,8 @@ const AppNavigator = () => {
       <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
+      <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+      <Stack.Screen name="EventDetail" component={EventDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
   )

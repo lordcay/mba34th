@@ -788,6 +788,39 @@ const renderReportModal = () => (
                 <InfoRow label="Origin" value={user?.origin || 'N/A'} />
             </View>
 
+            {/* 📍 Location Section - Modern Tinder-inspired Design */}
+            {(user?.currentCity || user?.distance !== null) && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Location</Text>
+                <View style={styles.locationCard}>
+                  <View style={styles.locationIconContainer}>
+                    <Ionicons name="location" size={24} color="#581845" />
+                  </View>
+                  <View style={styles.locationDetails}>
+                    {user?.currentCity && (
+                      <Text style={styles.locationCityText}>{user.currentCity}</Text>
+                    )}
+                    {user?.distance !== null && user?.distance !== undefined ? (
+                      <View style={styles.distanceBadge}>
+                        <Ionicons name="navigate" size={14} color="#581845" />
+                        <Text style={styles.distanceText}>
+                          {user?.distanceDisplay || (
+                            user.distance < 1 
+                              ? 'Less than 1 km away' 
+                              : user.distance < 10 
+                                ? `${user.distance.toFixed(1)} km away`
+                                : `${Math.round(user.distance)} km away`
+                          )}
+                        </Text>
+                      </View>
+                    ) : user?.locationSharingEnabled === false ? (
+                      <Text style={styles.locationHiddenText}>Distance hidden by user</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            )}
+
             {/* Academic Info */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Academic Details</Text>
@@ -1078,6 +1111,55 @@ borderRadius: 25,
     section: { paddingHorizontal: 20, paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#e5e5e5' },
     sectionTitle: { fontSize: 16, fontWeight: '600', marginBottom: 8, color: '#222' },
     sectionContent: { fontSize: 14, color: '#555' },
+    
+    // 📍 Location Section Styles - Modern Design
+    locationCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#faf5f9',
+        borderRadius: 12,
+        padding: 14,
+        marginTop: 4,
+    },
+    locationIconContainer: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: '#f0e7ef',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 14,
+    },
+    locationDetails: {
+        flex: 1,
+    },
+    locationCityText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#333',
+        marginBottom: 4,
+    },
+    distanceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0e7ef',
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        gap: 4,
+    },
+    distanceText: {
+        fontSize: 13,
+        color: '#581845',
+        fontWeight: '500',
+    },
+    locationHiddenText: {
+        fontSize: 13,
+        color: '#999',
+        fontStyle: 'italic',
+    },
+
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
     infoLabel: { color: '#666', fontSize: 14, flex: 1 },
     infoValue: { color: '#222', fontSize: 14, flex: 1, textAlign: 'right' },

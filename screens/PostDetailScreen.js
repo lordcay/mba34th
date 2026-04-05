@@ -115,7 +115,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   const getImageUrl = (url) => {
     if (!url) return null;
     if (url.startsWith('http')) return url;
-    return `https://three4th-street-backend.onrender.com${url.startsWith('/') ? '' : '/'}${url}`;
+    return `http://192.168.100.4:4000${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   // Poll helpers
