@@ -61,7 +61,7 @@ const VerifyOTPScreen = () => {
     }
 
     try {
-      const response = await axios.post('http://192.168.100.4:4000/accounts/verify-email', { token: otp });
+      const response = await axios.post('http://192.168.100.28:4000/accounts/verify-email', { token: otp });
 
       console.log("✅ Verification Response:", response.data);
 

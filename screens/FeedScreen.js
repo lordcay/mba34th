@@ -496,7 +496,7 @@ const goToProfile = async (comment) => {
       source={{
         uri: c.photo.startsWith("http")
           ? c.photo
-          : `http://192.168.100.4:4000${c.photo}`,
+          : `http://192.168.100.28:4000${c.photo}`,
       }}
       style={styles.avatarImg}
     />

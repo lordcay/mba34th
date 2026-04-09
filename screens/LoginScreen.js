@@ -48,7 +48,7 @@
 
 //     try {
 //       const response = await axios.post(
-//         'http://192.168.100.4:4000/accounts/authenticate',
+//         'http://192.168.100.28:4000/accounts/authenticate',
 //         { email: email.trim(), password: password.trim() }
 //       );
 //       const { token, id, user } = response.data;
@@ -304,7 +304,7 @@ const LoginScreen = () => {
 
     try {
       const response = await axios.post(
-        'http://192.168.100.4:4000/accounts/authenticate',
+        'http://192.168.100.28:4000/accounts/authenticate',
         { email: email.trim(), password: password.trim() }
       );
       const { token, id, user } = response.data;
@@ -319,10 +319,10 @@ const LoginScreen = () => {
       // 3️⃣ Check profile completion
       if (checkProfileCompletion(parsedUser)) {
         // Profile is complete, go to full app
-        navigation.reset({ index: 0, routes: [{ name: 'MainStack' }] });
+        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
       } else {
-        // Incomplete — force to EditProfileScreen
-        navigation.reset({ index: 0, routes: [{ name: 'EditProfileScreen' }] });
+        // Incomplete — force to EditProfile
+        navigation.reset({ index: 0, routes: [{ name: 'EditProfile' }] });
       }
     } catch (error) {
       Alert.alert('Login failed', error?.response?.data?.message || 'Please try again.');

@@ -1,6 +1,7 @@
 import { createContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import jwtDecode from 'jwt-decode';
 import { socket } from '../socket';
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
@@ -8,6 +9,8 @@ import * as Notifications from 'expo-notifications';
 import { checkProfileCompletion } from '../utils/checkProfileCompletion';
 import { useUnread } from '../context/UnreadContext';
 import { Platform } from 'react-native';
+import { navigationRef } from '../navigation/RootNavigation';
+import { registerAuthLogoutHandler } from '../services/api';
 
 
 const AuthContext = createContext();
@@ -16,6 +19,26 @@ const AuthProvider = ({ children }) => {
   const [token, setToken] = useState('');
   const [userId, setUserId] = useState('');
   const [user, setUser] = useState(null);
+
+  const getTokenExpiryMs = (jwt) => {
+    if (!jwt) return null;
+    try {
+      const decoded = jwtDecode(jwt);
+      return decoded?.exp ? decoded.exp * 1000 : null;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const isTokenExpired = (jwt) => {
+    const expiryMs = getTokenExpiryMs(jwt);
+    return expiryMs ? Date.now() >= expiryMs : false;
+  };
+
+  const shouldExpireSoon = (jwt, withinMs = 24 * 60 * 60 * 1000) => {
+    const expiryMs = getTokenExpiryMs(jwt);
+    return expiryMs ? expiryMs - Date.now() <= withinMs : false;
+  };
   const [isLoading, setIsLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -31,7 +54,7 @@ const AuthProvider = ({ children }) => {
       setToken(token);
       setUserId(userId);
 
-      const res = await axios.get(`http://192.168.100.4:4000/accounts/${userId}`, {
+      const res = await axios.get(`http://192.168.100.28:4000/accounts/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -54,10 +77,18 @@ const AuthProvider = ({ children }) => {
       setToken('');
       setUserId('');
       setUser(null);
+
+      if (navigationRef.isReady()) {
+        navigationRef.reset({ index: 0, routes: [{ name: 'Login' }] });
+      }
     } catch (error) {
       console.error('❌ Logout failed:', error);
     }
   };
+
+  useEffect(() => {
+    registerAuthLogoutHandler(logout);
+  }, [logout]);
 
   const isLoggedIn = async () => {
     try {
@@ -66,14 +97,26 @@ const AuthProvider = ({ children }) => {
       const storedUserId = await AsyncStorage.getItem('userId');
       const storedUser = await AsyncStorage.getItem('user');
 
+      if (storedToken && isTokenExpired(storedToken)) {
+        await AsyncStorage.multiRemove(['token', 'userId', 'user']);
+        setToken('');
+        setUserId('');
+        setUser(null);
+        return;
+      }
+
       if (storedToken) setToken(storedToken);
       if (storedUserId) setUserId(storedUserId);
+
+      if (storedToken && shouldExpireSoon(storedToken)) {
+        console.log('⚠️ Token is expiring soon. Keep session active using backend refresh or longer TTL.');
+      }
 
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
       } else if (storedToken && storedUserId) {
-        const res = await axios.get(`http://192.168.100.4:4000/accounts/${storedUserId}`, {
+        const res = await axios.get(`http://192.168.100.28:4000/accounts/${storedUserId}`, {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
 
@@ -299,7 +342,7 @@ export { AuthContext, AuthProvider };
 //       setToken(token);
 //       setUserId(userId);
 
-//       const res = await axios.get(`http://192.168.100.4:4000/accounts/${userId}`, {
+//       const res = await axios.get(`http://192.168.100.28:4000/accounts/${userId}`, {
 //         headers: { Authorization: `Bearer ${token}` },
 //       });
 
@@ -341,7 +384,7 @@ export { AuthContext, AuthProvider };
 //         const parsedUser = JSON.parse(storedUser);
 //         setUser(parsedUser);
 //       } else if (storedToken && storedUserId) {
-//         const res = await axios.get(`http://192.168.100.4:4000/accounts/${storedUserId}`, {
+//         const res = await axios.get(`http://192.168.100.28:4000/accounts/${storedUserId}`, {
 //           headers: { Authorization: `Bearer ${storedToken}` },
 //         });
 

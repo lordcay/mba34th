@@ -160,7 +160,7 @@ function generateJwtToken(account) {
             lastName: account.lastName,    // ✅ Add this
         },
         config.JWT_SECRET,
-        { expiresIn: '7d' }
+        { expiresIn: '90d' }
     );
 }
 */

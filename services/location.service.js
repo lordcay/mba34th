@@ -310,6 +310,27 @@ export const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 const toRadians = (degrees) => degrees * (Math.PI / 180);
 
+/**
+ * Geocode an address to get coordinates
+ * @param {string} address The address to geocode
+ * @returns {Promise<Object|null>} Object with latitude, longitude, or null if failed
+ */
+export const geocodeAddress = async (address) => {
+  try {
+    if (!address || typeof address !== 'string') return null;
+
+    const geocodeResult = await Location.geocodeAsync(address);
+    if (geocodeResult.length > 0) {
+      const { latitude, longitude } = geocodeResult[0];
+      return { latitude, longitude };
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ Error geocoding address:', error);
+    return null;
+  }
+};
+
 export default {
   requestLocationPermission,
   hasLocationPermission,
@@ -322,4 +343,5 @@ export default {
   getMyLocationSettings,
   formatDistance,
   calculateDistance,
+  geocodeAddress,
 };

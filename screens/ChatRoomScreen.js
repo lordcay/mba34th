@@ -39,7 +39,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const BASE_URL = 'http://192.168.100.4:4000';
+const BASE_URL = 'http://192.168.100.28:4000';
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 
@@ -587,31 +587,58 @@ const lastTypedAtRef = useRef(0);
     });
   }, [messages]);
 
+  const normalizeMessageText = (messageText) => {
+    if (messageText == null) return '';
+    if (typeof messageText === 'string') return messageText;
+    if (typeof messageText === 'number' || typeof messageText === 'boolean') return String(messageText);
+    if (Array.isArray(messageText)) {
+      return messageText.map((item) => normalizeMessageText(item)).join(', ');
+    }
+    if (typeof messageText === 'object') {
+      if (messageText.coordinates && messageText.type) {
+        const coords = Array.isArray(messageText.coordinates)
+          ? messageText.coordinates.join(', ')
+          : normalizeMessageText(messageText.coordinates);
+        return `Location: ${coords}`;
+      }
+      if (messageText.text != null) return normalizeMessageText(messageText.text);
+      if (messageText.message != null) return normalizeMessageText(messageText.message);
+      try {
+        return JSON.stringify(messageText);
+      } catch {
+        return String(messageText);
+      }
+    }
+    return String(messageText);
+  };
+
   // Render message text with @mentions and #hashtags highlighted
   const renderFormattedText = (messageText) => {
-    if (!messageText) return null;
-    
+    const normalized = normalizeMessageText(messageText);
+    if (!normalized) return null;
+
     // Pattern to match @mentions and #hashtags
     const pattern = /(@\w+(?:_\w+)?|#\w+)/g;
-    const parts = messageText.split(pattern);
-    
+    const parts = String(normalized).split(pattern);
+
     return (
       <Text style={styles.messageText}>
         {parts.map((part, index) => {
-          if (part.startsWith('@')) {
+          const display = part == null ? '' : String(part);
+          if (display.startsWith('@')) {
             return (
               <Text key={index} style={styles.mentionText}>
-                {part}
+                {display}
               </Text>
             );
-          } else if (part.startsWith('#')) {
+          } else if (display.startsWith('#')) {
             return (
               <Text key={index} style={styles.hashtagText}>
-                {part}
+                {display}
               </Text>
             );
           }
-          return <Text key={index}>{part}</Text>;
+          return <Text key={index}>{display}</Text>;
         })}
       </Text>
     );
@@ -1218,7 +1245,7 @@ useEffect(() => {
                       {replyToName}
                     </Text>
                     <Text style={styles.quotedReplyText} numberOfLines={2}>
-                      {replyToMessage}
+                      {normalizeMessageText(replyToMessage)}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1333,7 +1360,7 @@ useEffect(() => {
             <View style={styles.replyPreviewBar} />
             <View style={styles.replyPreviewContent}>
               <Text style={styles.replyPreviewName}>Replying to {replyTo.senderName}</Text>
-              <Text style={styles.replyPreviewText} numberOfLines={1}>{replyTo.message}</Text>
+              <Text style={styles.replyPreviewText} numberOfLines={1}>{normalizeMessageText(replyTo.message)}</Text>
             </View>
             <TouchableOpacity style={styles.replyPreviewClose} onPress={cancelReply}>
               <Ionicons name="close" size={20} color="#888" />
@@ -2088,7 +2115,7 @@ const styles = StyleSheet.create({
 //   useSafeAreaInsets,
 // } from 'react-native-safe-area-context';
 
-// const BASE_URL = 'http://192.168.100.4:4000';
+// const BASE_URL = 'http://192.168.100.28:4000';
 // const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 // const SOCKET_SERVER_URL = BASE_URL;
 

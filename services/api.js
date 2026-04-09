@@ -4,7 +4,7 @@ import { navigationRef } from '../navigation/RootNavigation';
 
 
 // Production URL
-const API_BASE_URL = "http://192.168.100.4:4000";
+const API_BASE_URL = "http://192.168.100.28:4000";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -12,6 +12,11 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 });
+
+let logoutHandler = null;
+export const registerAuthLogoutHandler = (handler) => {
+  logoutHandler = handler;
+};
 
 // Request interceptor to attach token
 api.interceptors.request.use(
@@ -34,20 +39,22 @@ api.interceptors.response.use(
     // If 401 Unauthorized (token expired or invalid), auto-logout
     if (status === 401) {
       console.log('🔒 Token expired or invalid - logging out...');
-      
-      // Clear stored credentials
-      try {
-        await AsyncStorage.multiRemove(['token', 'userId', 'user']);
-      } catch (e) {
-        console.error('Error clearing storage:', e);
-      }
-      
-      // Navigate to Auth screen
-      if (navigationRef.isReady()) {
-        navigationRef.reset({
-          index: 0,
-          routes: [{ name: 'Auth' }],
-        });
+
+      if (logoutHandler) {
+        await logoutHandler();
+      } else {
+        try {
+          await AsyncStorage.multiRemove(['token', 'userId', 'user']);
+        } catch (e) {
+          console.error('Error clearing storage:', e);
+        }
+
+        if (navigationRef.isReady()) {
+          navigationRef.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          });
+        }
       }
     }
     

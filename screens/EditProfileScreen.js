@@ -190,7 +190,7 @@ const hardSignOut = async () => {
   } catch {}
   // if you store other keys, also clear them here
   if (updateUser) updateUser(null);
-  navigation.reset({ index: 0, routes: [{ name: 'Auth' }] }); // or your login route
+  navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
 };
 
 
@@ -204,7 +204,7 @@ const handleDeleteAccount = async () => {
 
     // IMPORTANT: Your backend should perform irreversible deletion of the account
     // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`http://192.168.100.4:4000/accounts/${userId}`, {
+    await axios.delete(`http://192.168.100.28:4000/accounts/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
       // If your backend supports soft vs hard deletes, pass a flag:
       params: { hard: true }
@@ -470,7 +470,7 @@ const handleDeleteAccount = async () => {
       };
 
       const res = await axios.put(
-        `http://192.168.100.4:4000/accounts/${userId}`,
+        `http://192.168.100.28:4000/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -524,7 +524,7 @@ navigation.reset({
             await AsyncStorage.removeItem('token');
             await AsyncStorage.removeItem('userId');
             if (updateUser) updateUser(null);
-            navigation.reset({ index: 0, routes: [{ name: 'Auth' }] }); // or Login
+            navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
           },
         },
       ]
@@ -1895,7 +1895,7 @@ headerTitle: {
 
 //     // IMPORTANT: Your backend should perform irreversible deletion of the account
 //     // and associated personal data (or queue it for deletion), then return 200.
-//     await axios.delete(`http://192.168.100.4:4000/accounts/${userId}`, {
+//     await axios.delete(`http://192.168.100.28:4000/accounts/${userId}`, {
 //       headers: { Authorization: `Bearer ${token}` },
 //       // If your backend supports soft vs hard deletes, pass a flag:
 //       params: { hard: true }
@@ -2161,7 +2161,7 @@ headerTitle: {
 //       };
 
 //       const res = await axios.put(
-//         `http://192.168.100.4:4000/accounts/${userId}`,
+//         `http://192.168.100.28:4000/accounts/${userId}`,
 //         payload,
 //         {
 //           headers: {

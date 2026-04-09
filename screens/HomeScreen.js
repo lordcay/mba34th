@@ -41,7 +41,7 @@ const IMAGE_HEIGHT = height * 0.45;
 const FallbackImage = require('../assets/fff.jpg');
 
 const HomeScreen = () => {
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
   const { state: unreadState } = useUnread();
   const [verifiedUsers, setVerifiedUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +121,7 @@ const HomeScreen = () => {
   const userProfileImage = user?.photos?.[0] 
     ? (user.photos[0].startsWith('http') 
         ? user.photos[0] 
-        : `http://192.168.100.4:4000${user.photos[0]}`)
+        : `http://192.168.100.28:4000${user.photos[0]}`)
     : null;
 
 
@@ -420,8 +420,8 @@ if (sch) schools.add(String(sch).toUpperCase());
               borderColor: '#dee2e6',
             }}
             onPress={async () => {
-              await AsyncStorage.multiRemove(['token', 'userId', 'user']);
-              navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
+              await logout();
+              navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
             }}
           >
             <Text style={{ color: '#581845', fontWeight: '600' }}>Log Out</Text>
@@ -917,7 +917,7 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
 
   const renderSlide = ({ item: photo }) => {
     const uri = photo
-      ? (photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`)
+      ? (photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`)
       : null;
 
     return (
@@ -1100,7 +1100,7 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
             <Image
               source={
                 u.photos?.[0]
-                  ? { uri: u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.4:4000${u.photos[0]}` }
+                  ? { uri: u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.28:4000${u.photos[0]}` }
                   : FallbackImage
               }
               style={styles.disconnectAvatar}
@@ -2304,7 +2304,7 @@ const styles = StyleSheet.create({
 
 //   const renderSlide = ({ item: photo }) => {
 //     const uri = photo
-//       ? (photo.startsWith('http') ? photo : `http://192.168.100.4:4000${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`)
 //       : null;
 
 //     return (

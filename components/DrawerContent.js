@@ -73,13 +73,30 @@ const DrawerContent = ({ onClose, navigation }) => {
   const formattedSchool = school
     ? school.replace(/[-_]/g, ' ').trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
     : '';
-  const country = user?.country || user?.location || '';
+  
+  // Safely normalize location - handle both string and object (GeoJSON) formats
+  const normalizeLocation = (loc) => {
+    if (!loc) return '';
+    if (typeof loc === 'string') return loc;
+    if (typeof loc === 'object') {
+      if (loc.coordinates && loc.type) {
+        const coords = Array.isArray(loc.coordinates) ? loc.coordinates.join(', ') : String(loc.coordinates);
+        return `Location: ${coords}`;
+      }
+      if (loc.city) return loc.city;
+      if (loc.name) return loc.name;
+      return '';
+    }
+    return String(loc);
+  };
+  
+  const country = user?.country || normalizeLocation(user?.location) || '';
 
   // Profile image
   const userProfileImage = user?.photos?.[0]
     ? (user.photos[0].startsWith('http')
         ? user.photos[0]
-        : `http://192.168.100.4:4000${user.photos[0]}`)
+        : `http://192.168.100.28:4000${user.photos[0]}`)
     : null;
 
   const handleLogout = () => {
@@ -270,6 +287,18 @@ const DrawerContent = ({ onClose, navigation }) => {
             icon="people-outline"
             label="Connections"
             onPress={() => navigateTo('ConnectionsScreen')}
+          />
+          
+          <MenuItem
+            icon="calendar-outline"
+            label="Events"
+            onPress={() => navigateTo('Events')}
+          />
+          
+          <MenuItem
+            icon="briefcase-outline"
+            label="Services"
+            onPress={() => navigateTo('Services')}
           />
           
           <MenuItem

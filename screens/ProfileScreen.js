@@ -21,6 +21,7 @@ import axios from 'axios';
 import { RefreshControl } from 'react-native';
 import { Linking } from 'react-native';
 import { refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 
 
@@ -29,6 +30,7 @@ const ProfileScreen = () => {
   const { user, logout, updateUser } = useContext(AuthContext);
   const navigation = useNavigation();
   const school = user?.email?.split('@')[1]?.split('.')[0] || 'Unknown School';
+  const insets = useSafeAreaInsets();
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -59,7 +61,7 @@ const ProfileScreen = () => {
       const userId = await AsyncStorage.getItem('userId');
 
       const res = await axios.put(
-        `http://192.168.100.4:4000/accounts/${userId}`,
+        `http://192.168.100.28:4000/accounts/${userId}`,
         { photos: reordered },
         {
           headers: {
@@ -110,6 +112,17 @@ const ProfileScreen = () => {
 
   return (
     <ScrollView style={styles.container} >
+      <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
+        {navigation.canGoBack() ? (
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={24} color="#581845" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backBtnPlaceholder} />
+        )}
+        <Text style={styles.topNavTitle}>Profile</Text>
+        <View style={styles.backBtnPlaceholder} />
+      </View>
       {/* Profile Picture Section */}
       <View style={styles.profileHeader}>
         <Image
@@ -118,7 +131,7 @@ const ProfileScreen = () => {
               user.photos && user.photos.length > 0
                 ? user.photos[0].startsWith('http')
                   ? user.photos[0]
-                  : `http://192.168.100.4:4000${user.photos[0]}`
+                  : `http://192.168.100.28:4000${user.photos[0]}`
                 : 'https://via.placeholder.com/150',
           }}
           style={styles.profilePic}
@@ -161,7 +174,7 @@ const ProfileScreen = () => {
                   source={{
                     uri: item.startsWith('http')
                       ? item
-                      : `http://192.168.100.4:4000${item}`,
+                      : `http://192.168.100.28:4000${item}`,
                   }}
                   style={[
                     styles.galleryImage,
@@ -371,6 +384,29 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: '#fff',
     flex: 1,
+  },
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: '#fff',
+  },
+  topNavTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#333',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backBtnPlaceholder: {
+    width: 40,
+    height: 40,
   },
   profileHeader: {
     alignItems: 'center',

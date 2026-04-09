@@ -32,7 +32,7 @@ import OnboardingOverlay from '../components/OnboardingOverlay';
 
 
 
-const BASE_URL = 'http://192.168.100.4:4000';
+const BASE_URL = 'http://192.168.100.28:4000';
 
 const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -1261,7 +1261,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.100.4:4000';
+// const BASE_URL = 'http://192.168.100.28:4000';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -1936,7 +1936,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.100.4:4000';
+// const BASE_URL = 'http://192.168.100.28:4000';
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 

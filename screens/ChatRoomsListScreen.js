@@ -14,6 +14,7 @@ import {
     RefreshControl,
     Dimensions,
     ScrollView,
+    TouchableOpacity,
 } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 
 // ── API ────────────────────────────────────────────────────────────
-const API_URL = 'http://192.168.100.4:4000/chatrooms';
+const API_URL = 'http://192.168.100.28:4000/chatrooms';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ── Local Images (make sure these files exist in /assets) ─────────
@@ -427,9 +428,18 @@ export default function ChatRoomsListScreen({ navigation, route }) {
             >
                 <View style={styles.headerContent}>
                     <View style={styles.headerTop}>
-                        <View>
-                            <Text style={styles.headerTitle}>Community</Text>
-                            <Text style={styles.headerTitleBold}>Rooms</Text>
+                    <View style={styles.headerTitleGroup}>
+                            {navigation.canGoBack() ? (
+                                <TouchableOpacity style={styles.headerBackBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+                                    <Ionicons name="arrow-back" size={22} color="#fff" />
+                                </TouchableOpacity>
+                            ) : (
+                                <View style={styles.headerBackBtnPlaceholder} />
+                            )}
+                            <View>
+                                <Text style={styles.headerTitle}>Community</Text>
+                                <Text style={styles.headerTitleBold}>Rooms</Text>
+                            </View>
                         </View>
                         {totalUnread > 0 && (
                             <View style={styles.totalUnreadBadge}>
@@ -661,6 +671,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
+    },
+    headerTitleGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    headerBackBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.14)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 6,
+    },
+    headerBackBtnPlaceholder: {
+        width: 38,
+        height: 38,
+        marginRight: 6,
     },
     headerTitle: {
         fontSize: 16,

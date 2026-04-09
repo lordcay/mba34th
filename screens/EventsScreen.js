@@ -22,6 +22,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
 import eventService from '../services/event.service';
+import { getCurrentLocation, calculateDistance, formatDistance, hasLocationPermission, geocodeAddress } from '../services/location.service';
 import Colors from '../constants/Colors';
 
 const { width } = Dimensions.get('window');
@@ -138,7 +139,9 @@ const EventCard = ({ event, onPress, onRsvp }) => {
             </View>
             <View style={styles.distanceBadge}>
               <Ionicons name="navigate" size={12} color="#666" />
-              <Text style={styles.distanceText}>{distance} km away</Text>
+              <Text style={styles.distanceText}>
+                {event.distanceDisplay ? `${event.distanceDisplay} away` : 'Distance unavailable'}
+              </Text>
             </View>
           </View>
         )}
@@ -228,7 +231,6 @@ const EmptyState = ({ activeTab, onCreatePress }) => {
   );
 };
 
-// Main Events Screen
 const EventsScreen = () => {
   const { user } = useContext(AuthContext);
   const navigation = useNavigation();
@@ -248,8 +250,81 @@ const EventsScreen = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchActive, setIsSearchActive] = useState(false);
 
+  // Location state
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [locationSharingEnabled, setLocationSharingEnabled] = useState(true);
+
   const flatListRef = useRef(null);
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
+
+  // Get user location and check permissions
+  const initializeLocation = async () => {
+    try {
+      const hasPermission = await hasLocationPermission();
+      const sharingEnabled = user?.locationSharingEnabled !== false; // Default to true if not set
+      setLocationEnabled(hasPermission && sharingEnabled);
+      setLocationSharingEnabled(sharingEnabled);
+
+      if (hasPermission && sharingEnabled) {
+        const location = await getCurrentLocation();
+        if (location) {
+          setUserLocation(location);
+        }
+      }
+    } catch (error) {
+      console.log('Error getting location:', error);
+      setLocationEnabled(false);
+    }
+  };
+
+  // Calculate distance for an event (with geocoding if needed)
+  const calculateEventDistance = async (event) => {
+    if (!userLocation || !locationEnabled) return null;
+
+    let eventLat = event.latitude;
+    let eventLon = event.longitude;
+
+    // If event doesn't have coordinates, try to geocode the address
+    if (!eventLat || !eventLon) {
+      const address = event.fullAddress || event.location || event.venueName;
+      if (address) {
+        try {
+          const coords = await geocodeAddress(address);
+          if (coords) {
+            eventLat = coords.latitude;
+            eventLon = coords.longitude;
+          }
+        } catch (error) {
+          console.log('Error geocoding event address:', error);
+        }
+      }
+    }
+
+    if (!eventLat || !eventLon) return null;
+
+    return calculateDistance(
+      userLocation.latitude,
+      userLocation.longitude,
+      eventLat,
+      eventLon
+    );
+  };
+
+  // Add distance to events (async with geocoding)
+  const processEventsWithDistance = async (eventsList) => {
+    const eventsWithDistance = await Promise.all(
+      eventsList.map(async (event) => {
+        const distance = await calculateEventDistance(event);
+        return {
+          ...event,
+          distance,
+          distanceDisplay: formatDistance(distance)
+        };
+      })
+    );
+    return eventsWithDistance;
+  };
 
   // Fetch events based on active tab
   const fetchEvents = async (pageNum = 1, silent = false) => {
@@ -275,10 +350,11 @@ const EventsScreen = () => {
       }
 
       if (result.success && result.data) {
+        const eventsWithDistance = await processEventsWithDistance(result.data);
         if (pageNum === 1) {
-          setEvents(result.data);
+          setEvents(eventsWithDistance);
         } else {
-          setEvents(prev => [...prev, ...result.data]);
+          setEvents(prev => [...prev, ...eventsWithDistance]);
         }
         setHasMore(result.pagination?.hasMore ?? result.data.length === 15);
         setPage(pageNum);
@@ -298,6 +374,11 @@ const EventsScreen = () => {
     setHasMore(true);
     fetchEvents(1);
   }, [activeTab]);
+
+  // Initialize location on mount
+  useEffect(() => {
+    initializeLocation();
+  }, [user]);
 
   // Refresh on screen focus
   useFocusEffect(
@@ -501,7 +582,14 @@ const EventsScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
+        {navigation.canGoBack() ? (
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+            <Ionicons name="arrow-back" size={24} color={ACCENT} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backBtnPlaceholder} />
+        )}
         <Text style={styles.headerTitle}>Events</Text>
         <TouchableOpacity style={styles.createButton} onPress={goToCreateEvent}>
           <LinearGradient
@@ -593,6 +681,16 @@ const styles = StyleSheet.create({
   createButton: {
     borderRadius: 20,
     overflow: 'hidden',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backBtnPlaceholder: {
+    width: 40,
+    height: 40,
   },
   createButtonGradient: {
     width: 40,

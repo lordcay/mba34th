@@ -63,7 +63,7 @@ const GIPHY_TRENDING_URL = `https://api.giphy.com/v1/gifs/trending?api_key=${GIP
 const GIPHY_SEARCH_URL = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&limit=30&rating=pg-13`;
 
 
-const BASE_URL = 'http://192.168.100.4:4000';
+const BASE_URL = 'http://192.168.100.28:4000';
 
 const HEADER_HEIGHT = 56;
 const MIN_INPUT_HEIGHT = 40;
@@ -3274,7 +3274,7 @@ composerInput: {
 //     // const [userData, setUserData] = useState(user); // <-- local state
 // const [userData, setUserData] = useState(normalize(user));
 
-// const api = axios.create({ baseURL: 'http://192.168.100.4:4000' });
+// const api = axios.create({ baseURL: 'http://192.168.100.28:4000' });
 
 //   // my display name for typing events
 //   const [myDisplayName, setMyDisplayName] = useState('Someone');
@@ -3297,7 +3297,7 @@ composerInput: {
 //     (async () => {
 //       try {
 //         const res = await axios.get(
-//           `http://192.168.100.4:4000/accounts/${userData.id || userData._id}`,
+//           `http://192.168.100.28:4000/accounts/${userData.id || userData._id}`,
 //           { headers: { Authorization: `Bearer ${token}` } }
 //         );
 //         setUserData(res.data.users || res.data);
@@ -3312,7 +3312,7 @@ composerInput: {
 // //     (async () => {
 // //       try {
 // //         const res = await axios.get(
-// //           `http://192.168.100.4:4000/accounts/${users.id || users._id}`,
+// //           `http://192.168.100.28:4000/accounts/${users.id || users._id}`,
 // //           { headers: { Authorization: `Bearer ${token}` } }
 // //         );
 // //         setUser(res.data.users || res.data);
@@ -3328,7 +3328,7 @@ composerInput: {
 //     (async () => {
 //       try {
 //         const res = await axios.get(
-//           `http://192.168.100.4:4000/accounts/${userData.id || userData._id}`,
+//           `http://192.168.100.28:4000/accounts/${userData.id || userData._id}`,
 //           { headers: { Authorization: `Bearer ${token}` } }
 //         );
 //         setUserData(res.data.users || res.data);
@@ -3379,7 +3379,7 @@ composerInput: {
 //       source={{
 //         uri: userData?.photos?.[0]?.startsWith('http')
 //           ? userData.photos[0]
-//           : `http://192.168.100.4:4000${userData?.photos?.[0] || ''}`,
+//           : `http://192.168.100.28:4000${userData?.photos?.[0] || ''}`,
 //       }}
 //       style={{
 //         width: 32, height: 32, borderRadius: 16, marginRight: 10,
@@ -3597,7 +3597,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.4:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -3611,7 +3611,7 @@ composerInput: {
 //     const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //     try {
-//       const res = await axios.post('http://192.168.100.4:4000/messages', payload, {
+//       const res = await axios.post('http://192.168.100.28:4000/messages', payload, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 
@@ -3902,7 +3902,7 @@ composerInput: {
 //           source={{
 //             uri: user?.photos?.[0]?.startsWith('http')
 //               ? user.photos[0]
-//               : `http://192.168.100.4:4000${user?.photos?.[0] || ''}`,
+//               : `http://192.168.100.28:4000${user?.photos?.[0] || ''}`,
 //           }}
 //           style={{
 //             width: 32, height: 32, borderRadius: 16, marginRight: 10,
@@ -4117,7 +4117,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.4:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -4131,7 +4131,7 @@ composerInput: {
 //     const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //     try {
-//       const res = await axios.post('http://192.168.100.4:4000/messages', payload, {
+//       const res = await axios.post('http://192.168.100.28:4000/messages', payload, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 
@@ -4500,7 +4500,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.4:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -4514,7 +4514,7 @@ composerInput: {
 //   const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //   try {
-//     await axios.post('http://192.168.100.4:4000/messages', payload, {
+//     await axios.post('http://192.168.100.28:4000/messages', payload, {
 //       headers: { Authorization: `Bearer ${token}` }
 //     });
 //     // Do NOT push into state here—socket 'message:new' will arrive and add it once.
@@ -4570,7 +4570,7 @@ composerInput: {
 //             source={{
 //               uri: user?.photos?.[0]?.startsWith('http')
 //                 ? user.photos[0]
-//                 : `http://192.168.100.4:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+//                 : `http://192.168.100.28:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
 //             }}
 //             style={styles.profileImage}
 //           />

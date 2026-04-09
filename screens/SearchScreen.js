@@ -423,7 +423,7 @@ const SearchScreen = ({ route }) => {
   // Render user result card (compact)
   const renderUserResult = ({ item: u }) => {
     const photoUri = u.photos?.[0]
-      ? (u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.4:4000${u.photos[0]}`)
+      ? (u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.28:4000${u.photos[0]}`)
       : null;
 
     const schoolName = getSchoolName(u.email);
@@ -671,7 +671,7 @@ const SearchScreen = ({ route }) => {
               <Image
                 source={
                   disconnectTarget.photos?.[0]
-                    ? { uri: disconnectTarget.photos[0].startsWith('http') ? disconnectTarget.photos[0] : `http://192.168.100.4:4000${disconnectTarget.photos[0]}` }
+                    ? { uri: disconnectTarget.photos[0].startsWith('http') ? disconnectTarget.photos[0] : `http://192.168.100.28:4000${disconnectTarget.photos[0]}` }
                     : FallbackImage
                 }
                 style={styles.modalAvatar}

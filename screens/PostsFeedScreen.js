@@ -442,7 +442,7 @@ const PostsFeedScreen = () => {
   const formattedProfileImage = userProfileImage 
     ? (userProfileImage.startsWith('http') 
         ? userProfileImage 
-        : `http://192.168.100.4:4000${userProfileImage}`)
+        : `http://192.168.100.28:4000${userProfileImage}`)
     : null;
 
   // Data to display (search results or all posts)

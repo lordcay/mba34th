@@ -32,6 +32,9 @@ import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import { navigationRef } from './RootNavigation';
 import SupportWebScreen from '../screens/SupportWebScreen';
 import CallScreen from '../screens/CallScreen';
+import EventsScreen from '../screens/EventsScreen';
+import ServicesScreen from '../screens/ServicesScreen';
+import CreateServiceScreen from '../screens/CreateServiceScreen';
 import SearchScreen from '../screens/SearchScreen';
 import ConnectionRequestsScreen from '../screens/ConnectionRequestsScreen';
 import ChatRoomsListScreen from '../screens/ChatRoomsListScreen';
@@ -40,6 +43,7 @@ import ConnectionsScreen from '../screens/ConnectionsScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import CreateEventScreen from '../screens/CreateEventScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
+import ServiceDetailScreen from '../screens/ServiceDetailScreen';
 
 
 
@@ -88,6 +92,10 @@ const AppNavigator = () => {
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+      <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen name="Services" component={ServicesScreen} />
+      <Stack.Screen name="CreateService" component={CreateServiceScreen} />
+      <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>
@@ -106,6 +114,10 @@ const AppNavigator = () => {
       <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
       <Stack.Screen name="PostDetail" component={PostDetailScreen} />
       <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
+      <Stack.Screen name="Events" component={EventsScreen} />
+      <Stack.Screen name="Services" component={ServicesScreen} />
+      <Stack.Screen name="CreateService" component={CreateServiceScreen} />
+      <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} />
       <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
     </>

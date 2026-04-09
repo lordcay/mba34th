@@ -11,7 +11,7 @@ import ChatRoomScreen from '../screens/ChatRoomScreen';
 import FeedScreen from "../screens/FeedScreen";
 import PostsFeedScreen from "../screens/PostsFeedScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
-import EventsScreen from "../screens/EventsScreen";
+
 // import { Ionicons } from "@expo/vector-icons";
 
 
@@ -192,7 +192,6 @@ const TabNavigator = () => {
           let iconName;
           if (route.name === 'Home') iconName = 'home';
           else if (route.name === 'Feed') iconName = 'albums';
-          else if (route.name === 'Events') iconName = 'calendar';
           else if (route.name === 'Gist') iconName = 'newspaper';
           else if (route.name === 'Notifications') iconName = 'notifications';
           else if (route.name === 'ChatRooms') iconName = 'chatbubbles';
@@ -245,7 +244,6 @@ const TabNavigator = () => {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Feed" component={PostsFeedScreen} />
-      <Tab.Screen name="Events" component={EventsScreen} />
       <Tab.Screen name="Gist" component={FeedScreen} />
       <Tab.Screen 
         name="Notifications" 
