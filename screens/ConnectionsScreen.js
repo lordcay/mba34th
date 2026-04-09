@@ -104,7 +104,7 @@ const ConnectionsScreen = () => {
   const getProfileImage = (u) => {
     const photo = u?.photos?.[0];
     if (!photo) return null;
-    return photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`;
+    return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
   };
 
   const getTimeAgo = (dateString) => {

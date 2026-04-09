@@ -23,7 +23,7 @@ import { playPing, showTopToast } from '../utils/notify';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 
 
-const BASE_URL = 'http://192.168.100.28:4000';
+const BASE_URL = 'https://three4th-street-backend.onrender.com';
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const ChatScreen = () => {

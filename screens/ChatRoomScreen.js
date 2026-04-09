@@ -39,7 +39,7 @@ import {
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const BASE_URL = 'http://192.168.100.28:4000';
+const BASE_URL = 'https://three4th-street-backend.onrender.com';
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 
@@ -2115,7 +2115,7 @@ const styles = StyleSheet.create({
 //   useSafeAreaInsets,
 // } from 'react-native-safe-area-context';
 
-// const BASE_URL = 'http://192.168.100.28:4000';
+// const BASE_URL = 'https://three4th-street-backend.onrender.com';
 // const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 // const SOCKET_SERVER_URL = BASE_URL;
 

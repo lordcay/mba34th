@@ -1,7 +1,7 @@
 // services/service.service.js
 import api from './api';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.100.28:4000';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://three4th-street-backend.onrender.com';
 
 const serviceService = {
   // ===== PUBLIC SERVICES =====

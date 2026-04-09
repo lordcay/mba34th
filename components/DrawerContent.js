@@ -96,7 +96,7 @@ const DrawerContent = ({ onClose, navigation }) => {
   const userProfileImage = user?.photos?.[0]
     ? (user.photos[0].startsWith('http')
         ? user.photos[0]
-        : `http://192.168.100.28:4000${user.photos[0]}`)
+        : `https://three4th-street-backend.onrender.com${user.photos[0]}`)
     : null;
 
   const handleLogout = () => {

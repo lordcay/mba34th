@@ -54,7 +54,7 @@ const AuthProvider = ({ children }) => {
       setToken(token);
       setUserId(userId);
 
-      const res = await axios.get(`http://192.168.100.28:4000/accounts/${userId}`, {
+      const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 

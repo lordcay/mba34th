@@ -4,7 +4,7 @@ import { navigationRef } from '../navigation/RootNavigation';
 
 
 // Production URL
-const API_BASE_URL = "http://192.168.100.28:4000";
+const API_BASE_URL = "https://three4th-street-backend.onrender.com";
 
 const api = axios.create({
   baseURL: API_BASE_URL,

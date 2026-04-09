@@ -650,7 +650,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
   // Format image URL
   const getImageUrl = (url) => {
     if (!url) return null;
-    return url.startsWith('http') ? url : `http://192.168.100.28:4000${url}`;
+    return url.startsWith('http') ? url : `https://three4th-street-backend.onrender.com${url}`;
   };
   
   // Author profile image
@@ -865,7 +865,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
   const getConnectionImage = (connection) => {
     const img = connection?.profileImage || connection?.photos?.[0];
     if (!img) return null;
-    return img.startsWith('http') ? img : `http://192.168.100.28:4000${img}`;
+    return img.startsWith('http') ? img : `https://three4th-street-backend.onrender.com${img}`;
   };
 
   return (

@@ -174,11 +174,11 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }) => {
   const userProfileImage = user?.photos?.[0] 
     ? (user.photos[0].startsWith('http') 
         ? user.photos[0] 
-        : `http://192.168.100.28:4000${user.photos[0]}`)
+        : `https://three4th-street-backend.onrender.com${user.photos[0]}`)
     : (user?.profileImage
         ? (user.profileImage.startsWith('http')
             ? user.profileImage
-            : `http://192.168.100.28:4000${user.profileImage}`)
+            : `https://three4th-street-backend.onrender.com${user.profileImage}`)
         : null);
   
   // Upload to Cloudinary
@@ -667,7 +667,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }) => {
               {images.map((img, index) => (
                 <View key={index} style={styles.imagePreviewWrap}>
                   <Image
-                    source={{ uri: img.startsWith('http') ? img : `http://192.168.100.28:4000${img}` }}
+                    source={{ uri: img.startsWith('http') ? img : `https://three4th-street-backend.onrender.com${img}` }}
                     style={styles.imagePreview}
                   />
                   <TouchableOpacity 

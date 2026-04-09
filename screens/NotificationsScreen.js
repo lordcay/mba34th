@@ -33,7 +33,7 @@ const FallbackImage = require('../assets/fff.jpg');
 const getImageUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `http://192.168.100.28:4000${path.startsWith('/') ? '' : '/'}${path}`;
+  return `https://three4th-street-backend.onrender.com${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
 const NotificationsScreen = () => {
