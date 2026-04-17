@@ -24,6 +24,7 @@ import {
 } from '../services/connection.service';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const ConnectionRequestsScreen = () => {
   const navigation = useNavigation();
@@ -117,7 +118,7 @@ const ConnectionRequestsScreen = () => {
   const getProfileImage = (u) => {
     const photo = u?.photos?.[0];
     if (!photo) return null;
-    return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
+    return photo.startsWith('http') ? photo : `${API_BASE_URL}${photo}`;
   };
 
   const getTimeAgo = (dateString) => {

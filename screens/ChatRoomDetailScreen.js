@@ -12,8 +12,9 @@ import {
 import { AuthContext } from '../context/AuthContext';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
-const socket = io('http://192.168.100.28:4000'); // ✅ Replace with your IP
+const socket = io(API_BASE_URL);
 
 const ChatRoomDetailScreen = ({ route }) => {
     const { chatroomId } = route.params;
@@ -43,7 +44,7 @@ const ChatRoomDetailScreen = ({ route }) => {
     useEffect(() => {
         const fetchMessages = async () => {
             try {
-                const res = await axios.get(`http://192.168.100.28:4000/api/chatroom-messages/${chatroomId}/messages`);
+                const res = await axios.get(`${API_BASE_URL}/api/chatroom-messages/${chatroomId}/messages`);
                 setMessages(res.data);
             } catch (err) {
                 console.error('❌ Failed to fetch messages', err);

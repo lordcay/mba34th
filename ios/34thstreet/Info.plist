@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.7</string>
+    <string>1.1.8</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -50,16 +50,24 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>34th Street needs full calendar access to help you schedule and manage events.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>34th Street may access your calendar to help you schedule and manage events.</string>
     <key>NSCameraUsageDescription</key>
     <string>Allow 34thstreet to access your camera to take a new profile picture.</string>
     <key>NSContactsUsageDescription</key>
     <string>We need access to your contacts to help you find and connect with friends on 34th Street.</string>
+    <key>NSFaceIDUsageDescription</key>
+    <string>Use Face ID to sign in to your 34th Street account quickly and securely.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow 34thstreet to access your microphone for voice and video calls.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>We may save edited photos to your library.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow 34thstreet to access your photos so you can upload a profile picture.</string>
+    <key>RCTNewArchEnabled</key>
+    <true/>
     <key>UIBackgroundModes</key>
     <array>
       <string>fetch</string>

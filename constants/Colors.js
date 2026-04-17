@@ -6,6 +6,7 @@ export const Colors = {
   primary: '#581845',           // Main brand purple
   primaryLight: '#7B2D6E',      // Lighter purple for hover states
   primaryDark: '#3D1030',       // Darker purple for pressed states
+  primarySoft: '#F5EDF8',       // Light purple for card/tag backgrounds
   primaryFaded: '#58184510',    // Very transparent for backgrounds
   primaryMuted: '#58184520',    // Light purple tint for backgrounds
   
@@ -65,6 +66,7 @@ export const {
   primary,
   primaryLight,
   primaryDark,
+  primarySoft,
   primaryFaded,
   primaryMuted,
   secondary,

@@ -71,9 +71,11 @@
 
 
 // App.js
-import React, { useContext, useEffect, useRef, useState } from 'react';
-import { View, Text, AppState, Platform } from 'react-native';
-import { useFonts, Poppins_400Regular, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import React, { useContext, useEffect, useRef, useState, Component } from 'react';
+import { View, Text, AppState, Platform, StyleSheet as RNStyleSheet } from 'react-native';
+import * as Font from 'expo-font';
+import { Poppins_400Regular, Poppins_700Bold } from '@expo-google-fonts/poppins';
+import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
@@ -88,6 +90,45 @@ import { useUnread } from './context/UnreadContext';
 import { setupPushNotifications } from './hooks/usePushNotifications';
 import { CallProvider } from './context/CallContext';
 import { OnboardingProvider } from './context/OnboardingContext';
+
+// Keep splash screen visible until we explicitly hide it
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
+// Global Error Boundary — prevents React 19 from unmounting entire tree on error
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary caught:', error, info?.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={ebStyles.container}>
+          <Text style={ebStyles.emoji}>⚠️</Text>
+          <Text style={ebStyles.title}>Something went wrong</Text>
+          <Text style={ebStyles.message}>Please close and reopen the app.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const ebStyles = RNStyleSheet.create({
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 32 },
+  emoji: { fontSize: 48, marginBottom: 16 },
+  title: { fontSize: 20, fontWeight: '700', color: '#581845', marginBottom: 8 },
+  message: { fontSize: 15, color: '#666', textAlign: 'center' },
+});
 
 
 
@@ -506,32 +547,53 @@ useEffect(() => {
 };
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
-    Poppins_400Regular,
-    Poppins_700Bold,
-  });
+  const [appReady, setAppReady] = useState(false);
 
-  if (!fontsLoaded) {
-    return (
-      <View>
-        <Text>Loading fonts...</Text>
-      </View>
-    );
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Load fonts with a timeout safety net
+        await Promise.race([
+          Font.loadAsync({
+            Poppins_400Regular,
+            Poppins_700Bold,
+          }),
+          new Promise((resolve) => setTimeout(resolve, 5000)), // 5s max wait
+        ]);
+      } catch (e) {
+        console.warn('Font loading failed, continuing anyway:', e);
+      } finally {
+        setAppReady(true);
+      }
+    }
+    prepare();
+  }, []);
+
+  useEffect(() => {
+    if (appReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [appReady]);
+
+  if (!appReady) {
+    return null;
   }
 
   return (
-  <UnreadProvider>
-    <AuthProvider>
-      <CallProvider>
-        <OnboardingProvider>
-          <WithSocketListener>
-            <AppNavigator />
-            <Toast />
-          </WithSocketListener>
-        </OnboardingProvider>
-      </CallProvider>
-    </AuthProvider>
-  </UnreadProvider>
+  <ErrorBoundary>
+    <UnreadProvider>
+      <AuthProvider>
+        <CallProvider>
+          <OnboardingProvider>
+            <WithSocketListener>
+              <AppNavigator />
+              <Toast />
+            </WithSocketListener>
+          </OnboardingProvider>
+        </CallProvider>
+      </AuthProvider>
+    </UnreadProvider>
+  </ErrorBoundary>
 );
 
 

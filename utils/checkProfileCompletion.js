@@ -38,3 +38,23 @@ export const checkProfileCompletion = (user) => {
     hasArray(user.photos)
   );
 };
+
+export const getProfileMissingFields = (user) => {
+  if (!user) return [];
+
+  const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+  const hasArray = (v) => Array.isArray(v) && v.length > 0;
+
+  const checks = [
+    { field: 'Country of Origin', ok: hasText(user.origin) },
+    { field: 'Field of Study', ok: hasText(user.fieldOfStudy) },
+    { field: 'Graduation Year', ok: hasText(String(user.graduationYear || '')) },
+    { field: 'Current / Previous Role', ok: hasText(user.currentRole) },
+    { field: 'Industry', ok: hasText(user.industry) },
+    { field: 'Bio', ok: hasText(user.bio) },
+    { field: 'Interests', ok: hasArray(user.interests) },
+    { field: 'Photos', ok: hasArray(user.photos) },
+  ];
+
+  return checks.filter((c) => !c.ok).map((c) => c.field);
+};

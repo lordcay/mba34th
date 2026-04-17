@@ -17,6 +17,7 @@ import {
   FlatList,
   TextInput,
   Pressable,
+  Modal as RNModal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -32,13 +33,15 @@ import { socket } from '../socket';
 import { playPing, showTopToast } from '../utils/notify';
 import DrawerContent from '../components/DrawerContent';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import RecoveryEmailModal from '../components/RecoveryEmailModal';
 
-const { width: SCREEN_WIDTH, height } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CARD_MARGIN_H = 20;
 const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN_H * 2;
-const IMAGE_HEIGHT = height * 0.45;
+const IMAGE_HEIGHT = SCREEN_HEIGHT * 0.45;
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const HomeScreen = () => {
   const { user, logout } = useContext(AuthContext);
@@ -52,6 +55,9 @@ const HomeScreen = () => {
 
   // Drawer state
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+  // Recovery email reminder
+  const [showRecoveryReminder, setShowRecoveryReminder] = useState(false);
 
   // Get unread DM count for badge
   const dmUnreadCount = Object.values(unreadState?.dmByUserId || {}).reduce((a, b) => a + b, 0);
@@ -121,7 +127,7 @@ const HomeScreen = () => {
   const userProfileImage = user?.photos?.[0] 
     ? (user.photos[0].startsWith('http') 
         ? user.photos[0] 
-        : `http://192.168.100.28:4000${user.photos[0]}`)
+        : `${API_BASE_URL}${user.photos[0]}`)
     : null;
 
 
@@ -303,6 +309,33 @@ const activeFilterCount = Object.values(filters).filter((v) => {
     const timeoutId = setTimeout(updateLocation, Platform.OS === 'android' ? 1500 : 500);
     return () => clearTimeout(timeoutId);
   }, []);
+
+  // Recovery email 7-day reminder for students
+  useEffect(() => {
+    if (!user) return;
+    // Skip if alumni or already verified
+    if (user.recoveryEmailVerified) return;
+    // Check type - alumni don't need this (they already use personal email)
+    const userType = (user.type || '').toLowerCase();
+    if (userType === 'alumni' || userType === 'professional') return;
+
+    const checkReminder = async () => {
+      // Check local dismiss timestamp first (faster than relying on server)
+      const localDismissed = await AsyncStorage.getItem('recovery_email_dismissed_at');
+      const serverDismissed = user.recoveryEmailDismissedAt;
+      const lastDismissed = localDismissed || serverDismissed;
+
+      if (lastDismissed) {
+        const daysSince = (Date.now() - new Date(lastDismissed).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince < 7) return; // Not yet 7 days
+      }
+
+      // Show the reminder after a short delay so it doesn't feel jarring
+      setTimeout(() => setShowRecoveryReminder(true), 2000);
+    };
+
+    checkReminder();
+  }, [user?.recoveryEmailVerified, user?.recoveryEmailDismissedAt]);
 
 
   // ----------------------------
@@ -563,6 +596,12 @@ if (sch) schools.add(String(sch).toUpperCase());
           navigation={navigation}
         />
       </Modal>
+
+      <RecoveryEmailModal
+        visible={showRecoveryReminder}
+        onClose={() => setShowRecoveryReminder(false)}
+        isReminder
+      />
     </SafeAreaView>
     </OnboardingOverlay>
   );
@@ -790,6 +829,10 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
   const [showDisconnectModal, setShowDisconnectModal] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
 
+  // 📷 Fullscreen photo viewer state
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
   // Fetch real connection status from backend on mount
   useEffect(() => {
     const fetchStatus = async () => {
@@ -915,17 +958,26 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
     navigation.navigate('PrivateChat', { user: u });
   };
 
-  const renderSlide = ({ item: photo }) => {
-    const uri = photo
-      ? (photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`)
-      : null;
+  const resolvePhotoUri = (photo) =>
+    photo ? (photo.startsWith('http') ? photo : `${API_BASE_URL}${photo}`) : null;
+
+  const renderSlide = ({ item: photo, index }) => {
+    const uri = resolvePhotoUri(photo);
 
     return (
-      <Image
-        source={uri ? { uri } : FallbackImage}
-        style={styles.image}
-        resizeMode="cover"
-      />
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => {
+          setViewerIndex(index);
+          setViewerVisible(true);
+        }}
+      >
+        <Image
+          source={uri ? { uri } : FallbackImage}
+          style={styles.image}
+          resizeMode="cover"
+        />
+      </TouchableOpacity>
     );
   };
 
@@ -1083,7 +1135,78 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         {/* Location info now shown on photo badge - removed from here for cleaner design */}
       </View>
 
-      {/* 🔴 Disconnect Confirmation Modal */}
+      {/* � Fullscreen Photo Viewer */}
+      <RNModal
+        visible={viewerVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setViewerVisible(false)}
+      >
+        <View style={viewerStyles.overlay}>
+          <StatusBar barStyle="light-content" />
+
+          {/* Top bar */}
+          <View style={[viewerStyles.topBar, { paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 10 }]}>
+            <TouchableOpacity onPress={() => setViewerVisible(false)} style={viewerStyles.closeBtn} activeOpacity={0.7}>
+              <Ionicons name="close" size={26} color="#fff" />
+            </TouchableOpacity>
+            <Text style={viewerStyles.counter}>
+              {photos.length > 1 ? `${viewerIndex + 1} / ${photos.length}` : ''}
+            </Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          {/* Swipeable photos */}
+          <FlatList
+            data={photos}
+            keyExtractor={(_, i) => String(i)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            bounces={false}
+            initialScrollIndex={viewerIndex}
+            getItemLayout={(_, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setViewerIndex(idx);
+            }}
+            renderItem={({ item: photo }) => {
+              const uri = resolvePhotoUri(photo);
+              return (
+                <View style={viewerStyles.slide}>
+                  <Image
+                    source={uri ? { uri } : FallbackImage}
+                    style={viewerStyles.fullImage}
+                    resizeMode="contain"
+                  />
+                </View>
+              );
+            }}
+          />
+
+          {/* Bottom dots */}
+          {photos.length > 1 && (
+            <View style={viewerStyles.dotsRow}>
+              {photos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    viewerStyles.dot,
+                    i === viewerIndex && viewerStyles.dotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </RNModal>
+
+      {/* �🔴 Disconnect Confirmation Modal */}
       <Modal
         isVisible={showDisconnectModal}
         onBackdropPress={() => !disconnecting && setShowDisconnectModal(false)}
@@ -1100,7 +1223,7 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
             <Image
               source={
                 u.photos?.[0]
-                  ? { uri: u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.28:4000${u.photos[0]}` }
+                  ? { uri: u.photos[0].startsWith('http') ? u.photos[0] : `${API_BASE_URL}${u.photos[0]}` }
                   : FallbackImage
               }
               style={styles.disconnectAvatar}
@@ -1147,6 +1270,70 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
 };
 
 export default HomeScreen;
+
+// ==================== FULLSCREEN PHOTO VIEWER STYLES ====================
+const viewerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counter: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  slide: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT * 0.75,
+  },
+  dotsRow: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 50 : 30,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: 'rgba(255,255,255,0.35)',
+  },
+  dotActive: {
+    backgroundColor: '#fff',
+    width: 20,
+    borderRadius: 4,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
@@ -2304,7 +2491,7 @@ const styles = StyleSheet.create({
 
 //   const renderSlide = ({ item: photo }) => {
 //     const uri = photo
-//       ? (photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.14.134:4000${photo}`)
 //       : null;
 
 //     return (

@@ -26,6 +26,7 @@ import Colors from '../constants/Colors';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const PostsFeedScreen = () => {
   const { user } = useContext(AuthContext);
@@ -442,7 +443,7 @@ const PostsFeedScreen = () => {
   const formattedProfileImage = userProfileImage 
     ? (userProfileImage.startsWith('http') 
         ? userProfileImage 
-        : `https://three4th-street-backend.onrender.com${userProfileImage}`)
+        : `${API_BASE_URL}${userProfileImage}`)
     : null;
 
   // Data to display (search results or all posts)

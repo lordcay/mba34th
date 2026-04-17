@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useContext, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import {
   Pressable,
   StatusBar,
   Switch,
+  ActionSheetIOS,
+  Dimensions,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Linking, Platform } from 'react-native';
@@ -30,6 +32,18 @@ import Toast from 'react-native-toast-message';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import { setLocationSharingEnabled, refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
+import { API_BASE_URL } from '../config';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import {
+  isBiometricSupported,
+  isBiometricEnabled,
+  getBiometricTypeName,
+  authenticateWithBiometrics,
+  saveBiometricCredentials,
+  clearBiometricCredentials,
+} from '../services/biometric.service';
+import { checkProfileCompletion, getProfileMissingFields } from '../utils/checkProfileCompletion';
+import RecoveryEmailModal from '../components/RecoveryEmailModal';
 // add this with your other imports
 // import { Linking } from 'react-native';
 
@@ -52,6 +66,9 @@ const nukeLocal = async () => {
 const EditProfileScreen = ({ navigation }) => {
   const { user, updateUser, } = useContext(AuthContext);
   // const navigation = useNavigation();
+
+  const isProfileForced = !checkProfileCompletion(user);
+  const missingFields = isProfileForced ? getProfileMissingFields(user) : [];
 
 
   const [email, setEmail] = useState('');
@@ -84,6 +101,17 @@ const EditProfileScreen = ({ navigation }) => {
   const [locationSharingOn, setLocationSharingOn] = useState(true);
   const [updatingLocation, setUpdatingLocation] = useState(false);
 
+  // 🔒 Biometric settings state
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricTypeName, setBiometricTypeName] = useState('Biometrics');
+
+  // Recovery email
+  const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+
+  // Track initial values for change detection
+  const initialValues = useRef(null);
+
 
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
@@ -106,33 +134,95 @@ useEffect(() => {
   console.log("PARENT STATE", navigation.getParent()?.getState());
 }, []);
 
+// Initialize biometric settings
+useEffect(() => {
+  (async () => {
+    const { supported } = await isBiometricSupported();
+    setBiometricSupported(supported);
+    if (supported) {
+      const enabled = await isBiometricEnabled();
+      setBiometricEnabled(enabled);
+      const typeName = await getBiometricTypeName();
+      setBiometricTypeName(typeName);
+    }
+  })();
+}, []);
+
+const handleBiometricToggle = async (value) => {
+  if (value) {
+    // Enabling — require biometric authentication first
+    const authResult = await authenticateWithBiometrics(
+      `Enable ${biometricTypeName} login`
+    );
+    if (!authResult.success) return;
+
+    // Get current credentials from AsyncStorage
+    const token = await AsyncStorage.getItem('token');
+    const storedUserId = await AsyncStorage.getItem('userId');
+    const storedUser = await AsyncStorage.getItem('user');
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    const userEmail = parsedUser?.email || '';
+
+    if (!token || !storedUserId || !userEmail) {
+      Alert.alert('Error', 'Unable to set up biometric login. Please sign in again.');
+      return;
+    }
+
+    const saved = await saveBiometricCredentials(userEmail, token, storedUserId);
+    if (saved) {
+      setBiometricEnabled(true);
+      Toast.show({
+        type: 'success',
+        text1: `${biometricTypeName} Login Enabled`,
+        text2: `You can now use ${biometricTypeName} to sign in`,
+      });
+    } else {
+      Alert.alert('Error', 'Failed to enable biometric login');
+    }
+  } else {
+    // Disabling
+    await clearBiometricCredentials();
+    setBiometricEnabled(false);
+    Toast.show({
+      type: 'info',
+      text1: 'Biometric Login Disabled',
+      text2: 'You will need to use your email and password to sign in',
+    });
+  }
+};
 
 
-  // Keep these where your other helpers/states are
+
+  // Format a Date object to YYYY-MM-DD using UTC to avoid timezone drift
   const toLocalYYYYMMDD = (dateObj) => {
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const d = String(dateObj.getDate()).padStart(2, '0');
+    const y = dateObj.getUTCFullYear();
+    const m = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(dateObj.getUTCDate() ).padStart(2, '0');
     return `${y}-${m}-${d}`;
   };
 
   // Parse incoming values safely (handles "YYYY-MM-DD", ISO strings, Date)
+  // Uses UTC-only methods so the date never shifts across timezones
   const parseDobToDate = (val) => {
     if (!val) return null;
-    if (val instanceof Date) return val;
+    if (val instanceof Date && !isNaN(val)) return val;
     if (typeof val === 'string') {
-      const onlyDate = val.split('T')[0]; // take date part if ISO
-      // force local midnight to avoid timezone shifts
-      return new Date(`${onlyDate}T00:00:00`);
+      const onlyDate = val.split('T')[0]; // strip time/tz from ISO strings
+      const [y, m, d] = onlyDate.split('-').map(Number);
+      if (!y || !m || !d) return null;
+      // Create date using UTC to prevent any timezone offset
+      return new Date(Date.UTC(y, m - 1, d));
     }
-    // fallback for numbers or other serializable types
     const d = new Date(val);
     return isNaN(d) ? null : d;
   };
 
   const prettyDate = (val) => {
     const d = parseDobToDate(val);
-    return d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : '';
+    if (!d) return '';
+    // Use UTC methods so the displayed date matches the stored YYYY-MM-DD
+    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`;
   };
 
   // iOS DOB modal temp selection
@@ -176,9 +266,48 @@ useEffect(() => {
       // 📍 Initialize location sharing preference
       setLocationSharingOn(user.locationSharingEnabled !== false);
 
-      // Note: You can load user.photos here if needed.
+      // Snapshot initial values for change detection
+      initialValues.current = {
+        phone: user.phone || '',
+        origin: user.origin || '',
+        bio: user.bio || '',
+        nickname: user.nickname || '',
+        dob: rawDob ? (parseDobToDate(rawDob) ? toLocalYYYYMMDD(parseDobToDate(rawDob)) : '') : '',
+        languages: Array.isArray(user.languages) ? user.languages.join(', ') : user.languages || '',
+        fieldOfStudy: user.fieldOfStudy || '',
+        graduationYear: user.graduationYear || '',
+        industry: user.industry || '',
+        currentRole: user.currentRole || '',
+        linkedIn: user.linkedIn || '',
+        funFact: user.funFact || '',
+        rship: user.rship || '',
+        interests: JSON.stringify((user.interests || []).slice().sort()),
+        photos: JSON.stringify(user.photos || []),
+      };
     }
   }, [user]);
+
+  const hasChanges = useMemo(() => {
+    if (!initialValues.current) return false;
+    const iv = initialValues.current;
+    return (
+      phone !== iv.phone ||
+      origin !== iv.origin ||
+      bio !== iv.bio ||
+      nickname !== iv.nickname ||
+      dob !== iv.dob ||
+      languages !== iv.languages ||
+      fieldOfStudy !== iv.fieldOfStudy ||
+      graduationYear !== iv.graduationYear ||
+      industry !== iv.industry ||
+      currentRole !== iv.currentRole ||
+      linkedIn !== iv.linkedIn ||
+      funFact !== iv.funFact ||
+      rship !== iv.rship ||
+      JSON.stringify(interests.slice().sort()) !== iv.interests ||
+      JSON.stringify(photos) !== iv.photos
+    );
+  }, [phone, origin, bio, nickname, dob, languages, fieldOfStudy, graduationYear, industry, currentRole, linkedIn, funFact, rship, interests, photos]);
 
 
 
@@ -204,7 +333,7 @@ const handleDeleteAccount = async () => {
 
     // IMPORTANT: Your backend should perform irreversible deletion of the account
     // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`http://192.168.100.28:4000/accounts/${userId}`, {
+    await axios.delete(`${API_BASE_URL}/accounts/${userId}`, {
       headers: { Authorization: `Bearer ${token}` },
       // If your backend supports soft vs hard deletes, pass a flag:
       params: { hard: true }
@@ -224,81 +353,109 @@ const handleDeleteAccount = async () => {
 
 
 
-  const pickImage = async () => {
+  // Upload states
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  const requestPhotoPermission = async () => {
+    let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+    if (!perm.granted) {
+      Alert.alert(
+        'Permission needed',
+        'Please allow photo access to upload a profile picture.',
+        [
+          { text: 'Open Settings', onPress: () => Linking.openSettings?.() },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const uploadToCloudinary = async (uri) => {
+    const data = new FormData();
+    data.append('file', {
+      uri,
+      name: `profile_${Date.now()}.jpg`,
+      type: 'image/jpeg',
+    });
+    data.append('upload_preset', UPLOAD_PRESET);
+    const uploadRes = await fetch(CLOUDINARY_URL, { method: 'POST', body: data });
+    const json = await uploadRes.json();
+    if (json.secure_url) {
+      return json.secure_url;
+    }
+    throw new Error(json?.error?.message || 'Upload failed');
+  };
+
+  const launchPickerAndUpload = async (allowsEditing) => {
+    const pickerOptions = {
+      allowsEditing,
+      quality: 1,
+      exif: false,
+    };
+    if (allowsEditing) {
+      pickerOptions.aspect = [1, 1];
+    }
+    if (ImagePicker?.MediaType?.Image) {
+      pickerOptions.mediaTypes = [ImagePicker.MediaType.Image];
+    } else if (ImagePicker?.MediaTypeOptions?.Images) {
+      pickerOptions.mediaTypes = ImagePicker.MediaTypeOptions.Images;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+    if (result.canceled) return;
+
+    const asset = result.assets?.[0];
+    if (!asset?.uri) return;
+
+    setUploadingPhoto(true);
     try {
-      // 1) Permissions – no options argument here (avoids the TestFlight crash)
-      let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        perm = await ImagePicker.requestMediaLibraryPermissionsAsync(); // <-- no args
-      }
-
-      if (!perm.granted) {
-        Alert.alert(
-          'Permission needed',
-          'Please allow photo access to upload a profile picture.',
-          [
-            { text: 'Open Settings', onPress: () => Linking.openSettings?.() },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
-        return;
-      }
-
-      // 2) Picker options (backwards/forwards compatible)
-      const pickerOptions = {
-        allowsEditing: true,
-        quality: 1,
-        exif: false,
-      };
-
-      if (ImagePicker?.MediaType?.Image) {
-        // Newer SDKs
-        pickerOptions.mediaTypes = [ImagePicker.MediaType.Image];
-      } else if (ImagePicker?.MediaTypeOptions?.Images) {
-        // Older SDKs
-        pickerOptions.mediaTypes = ImagePicker.MediaTypeOptions.Images;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
-      if (result.canceled) return;
-
-      const asset = result.assets?.[0];
-      if (!asset?.uri) {
-        Alert.alert('Error', 'No image selected.');
-        return;
-      }
-
-      // 3) Resize/compress for faster uploads
       const manipulated = await ImageManipulator.manipulateAsync(
         asset.uri,
-        [{ resize: { width: 1000 } }],
-        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+        [{ resize: { width: 1080 } }],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
       );
-
-      // 4) Upload to Cloudinary via FormData (safer than base64)
-      const data = new FormData();
-      data.append('file', {
-        uri: manipulated.uri,
-        name: `profile_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-      });
-      // Make sure UPLOAD_PRESET has no slashes/spaces and is configured for unsigned uploads
-      data.append('upload_preset', UPLOAD_PRESET);
-      // If your unsigned preset ALLOWS specifying a folder, you can uncomment this:
-      // data.append('folder', '34thstreet_profile');
-
-      const uploadRes = await fetch(CLOUDINARY_URL, { method: 'POST', body: data });
-      const json = await uploadRes.json();
-      console.log('Cloudinary response:', json);
-
-      if (json.secure_url) {
-        setPhotos(prev => [...prev, json.secure_url]);
-      } else {
-        Alert.alert('Upload failed', json?.error?.message || 'Try again.');
-      }
+      const url = await uploadToCloudinary(manipulated.uri);
+      setPhotos(prev => [...prev, url]);
+      Toast.show({ type: 'success', text1: 'Photo uploaded!' });
     } catch (e) {
-      console.log('pickImage error:', e);
-      Alert.alert('Could not open gallery', String(e?.message || e));
+      Alert.alert('Upload failed', String(e?.message || e));
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const hasPermission = await requestPhotoPermission();
+    if (!hasPermission) return;
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Crop to Square', 'Upload Original'],
+          cancelButtonIndex: 0,
+          title: 'Choose upload style',
+          message: 'Cropped photos look best as profile pictures',
+        },
+        (index) => {
+          if (index === 1) launchPickerAndUpload(true);
+          else if (index === 2) launchPickerAndUpload(false);
+        }
+      );
+    } else {
+      Alert.alert(
+        'Choose upload style',
+        'Cropped photos look best as profile pictures',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Crop to Square', onPress: () => launchPickerAndUpload(true) },
+          { text: 'Upload Original', onPress: () => launchPickerAndUpload(false) },
+        ]
+      );
     }
   };
 
@@ -470,7 +627,7 @@ const handleDeleteAccount = async () => {
       };
 
       const res = await axios.put(
-        `http://192.168.100.28:4000/accounts/${userId}`,
+        `${API_BASE_URL}/accounts/${userId}`,
         payload,
         {
           headers: {
@@ -481,17 +638,20 @@ const handleDeleteAccount = async () => {
 
       if (res.data?.user) {
         await updateUser(res.data.user);
-        // Alert.alert('Success', 'Profile updated successfully!');
         Toast.show({
           type: 'success',
           text1: 'Profile updated!',
           text2: 'Your changes were saved.',
         });
 
-navigation.reset({
-  index: 0,
-  routes: [{ name: 'Home' }],
-});
+        // If profile was forced (incomplete), the navigator auto-switches
+        // to the full app stack once updateUser triggers re-render
+        if (!isProfileForced) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Home' }],
+          });
+        }
 
 
 //         navigation.getParent()?.reset({
@@ -551,40 +711,128 @@ navigation.reset({
 <SafeAreaView style={styles.container}>
      
     <View style={styles.headerRow}>
-  {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}> */}
+  {!isProfileForced && (
+    <TouchableOpacity
+      onPress={() => {
+        if (navigation.canGoBack()) navigation.goBack();
+        else navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      }}
+      style={styles.backButton}
+    >
+      <Ionicons name="chevron-back-outline" size={22} color="#581845" />
+      <Text style={styles.backText}>Back</Text>
+    </TouchableOpacity>
+  )}
+  {isProfileForced && <View style={{ width: 60 }} />}
+  <Text numberOfLines={1} style={styles.headerTitle}>
+    {isProfileForced ? 'Complete Your Profile' : 'Edit Your Profile'}
+  </Text>
   <TouchableOpacity
-  onPress={() => {
-    if (navigation.canGoBack()) navigation.goBack();
-    else navigation.reset({ index: 0, routes: [{ name: 'Home' }] }); // adjust route if needed
-  }}
-  style={styles.backButton}
->
-
-    <Ionicons name="chevron-back-outline" size={22} color="#581845" />
-    <Text style={styles.backText}>Back</Text>
+    style={[styles.headerSaveBtn, !hasChanges && !loading && styles.headerSaveBtnDisabled]}
+    onPress={handleSave}
+    disabled={loading || !hasChanges}
+    activeOpacity={0.7}
+  >
+    {loading ? (
+      <ActivityIndicator size={16} color="#fff" />
+    ) : (
+      <Ionicons name="checkmark" size={20} color={hasChanges ? '#fff' : 'rgba(255,255,255,0.5)'} />
+    )}
   </TouchableOpacity>
-  <Text numberOfLines={1} style={styles.headerTitle}>Edit Your Profile</Text>
-
-  {/* Spacer to balance layout */}
-  <View style={{ width: 60 }} />
 </View>
+
+    {isProfileForced && (
+      <View style={styles.completionBanner}>
+        <Ionicons name="alert-circle" size={22} color="#fff" />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.bannerTitle}>Almost there!</Text>
+          <Text style={styles.bannerText}>
+            Complete {missingFields.length === 1 ? 'this field' : 'these fields'} to unlock the app:{' '}
+            {missingFields.join(', ')}
+          </Text>
+        </View>
+      </View>
+    )}
     
-    <ScrollView >
-       {/* <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-           <Ionicons name="arrow-back" size={24} color="#000" />
-         </TouchableOpacity>
-      <Text style={styles.header}>Edit Your Profile</Text>  */}
+    <ScrollView showsVerticalScrollIndicator={false}>
 
-     
+      {/* ═══════ PHOTOS SECTION (TOP) ═══════ */}
+      <Text style={styles.sectionLabel}>Your Photos <Text style={styles.required}>*</Text></Text>
+      <Text style={styles.sectionHint}>First photo is your profile picture. Tap another to set it as profile.</Text>
+      <View style={styles.photoGrid}>
+        {photos.map((uri, idx) => (
+          <View key={idx} style={styles.photoWrapper}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => {
+                if (idx !== 0) {
+                  setSelectedPhotoIndex(idx);
+                  setShowConfirmModal(true);
+                }
+              }}
+            >
+              <Image source={{ uri }} style={[styles.photo, idx === 0 && styles.firstPhotoBorder]} />
+              {idx === 0 && (
+                <View style={styles.profileBadge}>
+                  <Ionicons name="star" size={10} color="#fff" />
+                  <Text style={styles.profileBadgeText}>Profile</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.removeBtn} onPress={() => handleRemovePhoto(idx)}>
+              <Ionicons name="close-circle" size={22} color="#e74c3c" />
+            </TouchableOpacity>
+          </View>
+        ))}
+        {photos.length < 6 && (
+          <TouchableOpacity onPress={pickImage} style={styles.addPhotoBtn} disabled={uploadingPhoto}>
+            {uploadingPhoto ? (
+              <ActivityIndicator color="#581845" />
+            ) : (
+              <>
+                <Ionicons name="camera-outline" size={28} color="#581845" />
+                <Text style={styles.addPhotoText}>Add Photo</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
 
-      <Text style={styles.label}>Nickname </Text>
+      {showConfirmModal && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalText}>Set this as your profile photo?</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtn}
+                onPress={() => {
+                  setShowConfirmModal(false);
+                  setAsProfilePhoto(selectedPhotoIndex);
+                }}
+              >
+                <Text style={styles.modalBtnText}>Yes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: '#ccc' }]}
+                onPress={() => setShowConfirmModal(false)}
+              >
+                <Text style={styles.modalBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {/* ═══════ PERSONAL INFO ═══════ */}
+      <Text style={styles.sectionLabel}>Personal Info</Text>
+
+      <Text style={styles.label}>Nickname</Text>
       <TextInput
         style={styles.input}
         value={nickname}
         onChangeText={setNickname}
         placeholder="Nickname"
       />
-
 
       <Text style={styles.label}>Phone Number</Text>
       <TextInput
@@ -780,7 +1028,7 @@ navigation.reset({
         style={styles.input}
         value={languages}
         onChangeText={setLanguages}
-        // placeholder="English, yoruba"
+        placeholder="e.g. English, Spanish, French"
       />
 
 
@@ -931,14 +1179,78 @@ navigation.reset({
         </View>
       </Modal>
 
-      {/* 📍 Location Settings Section */}
-      <View style={styles.locationSettingsSection}>
-        <Text style={styles.sectionHeader}>Location Settings</Text>
+      {/* ═══════ ABOUT YOU ═══════ */}
+      <Text style={styles.sectionLabel}>About You</Text>
+
+      <Text style={styles.label}>Bio / About Me <Text style={styles.required}>*</Text></Text>
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        value={bio}
+        onChangeText={setBio}
+        placeholder="Tell us about yourself..."
+        multiline
+        numberOfLines={5}
+        maxLength={700}
+      />
+
+      <Text style={styles.label}>Interests <Text style={styles.required}>*</Text></Text>
+      <View style={styles.tagsWrapper}>
+        {tags.map((tag) => (
+          <TouchableOpacity
+            key={tag}
+            style={[styles.tag, interests.includes(tag) && styles.tagSelected]}
+            onPress={() => toggleInterest(tag)}>
+            <Text style={[styles.tagText, interests.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ═══════ SETTINGS CARDS ═══════ */}
+      <Text style={styles.sectionLabel}>Settings</Text>
+
+      {/* Recovery Email Section */}
+      <View style={styles.settingsCard}>
+        <View style={styles.settingsCardHeader}>
+          <Ionicons name="shield-checkmark" size={20} color="#581845" />
+          <Text style={styles.settingsCardTitle}>Recovery Email</Text>
+        </View>
+        <Text style={styles.recoveryDesc}>
+          Add a personal email so you can log in after graduation when your school email expires.
+        </Text>
+        {user?.recoveryEmailVerified && user?.recoveryEmail ? (
+          <View style={styles.recoveryVerified}>
+            <Ionicons name="checkmark-circle" size={18} color="#27ae60" />
+            <Text style={styles.recoveryVerifiedText}>{user.recoveryEmail}</Text>
+            <TouchableOpacity onPress={() => setShowRecoveryModal(true)}>
+              <Text style={styles.recoveryChangeLink}>Change</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.recoveryAddBtn}
+            onPress={() => setShowRecoveryModal(true)}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#581845" />
+            <Text style={styles.recoveryAddText}>Set up recovery email</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <RecoveryEmailModal
+        visible={showRecoveryModal}
+        onClose={() => setShowRecoveryModal(false)}
+      />
+
+      {/* 📍 Location Settings */}
+      <View style={styles.settingsCard}>
+        <View style={styles.settingsCardHeader}>
+          <Ionicons name="location" size={20} color="#581845" />
+          <Text style={styles.settingsCardTitle}>Location Settings</Text>
+        </View>
         
-        {/* Current Location */}
         <View style={styles.locationPreviewRow}>
           <View style={styles.locationIconCircle}>
-            <Ionicons name="location" size={20} color="#581845" />
+            <Ionicons name="navigate" size={18} color="#581845" />
           </View>
           <View style={styles.locationTextContainer}>
             <Text style={styles.locationCityLabel}>
@@ -991,12 +1303,11 @@ navigation.reset({
           </TouchableOpacity>
         </View>
 
-        {/* Location Sharing Toggle */}
         <View style={styles.toggleRow}>
           <View style={styles.toggleTextContainer}>
-            <Text style={styles.toggleLabel}>Show Distance to Others</Text>
+            <Text style={styles.toggleLabel}>Show My City to Others</Text>
             <Text style={styles.toggleDescription}>
-              When enabled, other users will see how far away you are
+              When enabled, other members can see your current city and approximate distance
             </Text>
           </View>
           <Switch
@@ -1009,7 +1320,6 @@ navigation.reset({
                   updateUser(result.user);
                 }
               } catch (err) {
-                // Revert on error
                 setLocationSharingOn(!value);
                 Alert.alert('Error', 'Failed to update setting');
               }
@@ -1020,90 +1330,45 @@ navigation.reset({
         </View>
       </View>
 
+      {/* 🔒 Security Settings */}
+      {biometricSupported && (
+      <View style={styles.settingsCard}>
+        <View style={styles.settingsCardHeader}>
+          <MaterialCommunityIcons name="shield-lock-outline" size={20} color="#581845" />
+          <Text style={styles.settingsCardTitle}>Security</Text>
+        </View>
 
-
-
-
-
-      <Text style={styles.label}>Bio / About Me <Text style={styles.required}>*</Text></Text>
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        value={bio}
-        onChangeText={setBio}
-        placeholder="Tell us about yourself..."
-        multiline
-        numberOfLines={5}
-        maxLength={700}
-      />
-
-      <Text style={styles.label}>Interests <Text style={styles.required}>*</Text></Text>
-      <View style={styles.tagsWrapper}>
-        {tags.map((tag) => (
-          <TouchableOpacity
-            key={tag}
-            style={[styles.tag, interests.includes(tag) && styles.tagSelected]}
-            onPress={() => toggleInterest(tag)}>
-            <Text style={[styles.tagText, interests.includes(tag) && styles.tagTextSelected]}>{tag}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>Upload Photos <Text style={styles.required}>*</Text></Text>
-      <View style={styles.photoGrid}>
-        {photos.map((uri, idx) => (
-          <View key={idx} style={styles.photoWrapper}>
-            <TouchableOpacity
-              onPress={() => {
-                if (idx !== 0) {
-                  setSelectedPhotoIndex(idx);
-                  setShowConfirmModal(true);
-                }
-              }}
-            >
-              <Image
-                source={{ uri }}
-                style={[styles.photo, idx === 0 && styles.firstPhotoBorder]}
+        <View style={styles.toggleRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+            <View style={styles.biometricIconCircle}>
+              <MaterialCommunityIcons
+                name={biometricTypeName === 'Face ID' ? 'face-recognition' : 'fingerprint'}
+                size={22}
+                color="#581845"
               />
-              {idx === 0 && <Text style={styles.profileLabel}>Profile Photo</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.removeBtn} onPress={() => handleRemovePhoto(idx)}>
-              <Text style={styles.removeText}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-        {photos.length < 6 && (
-          <TouchableOpacity onPress={pickImage} style={styles.addPhotoBtn}>
-            <Text style={styles.addPhotoText}>+ Add Photo</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {showConfirmModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalText}>Set this as your profile photo?</Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalBtn}
-                onPress={() => {
-                  setShowConfirmModal(false);
-                  setAsProfilePhoto(selectedPhotoIndex);
-                }}
-              >
-                <Text style={styles.modalBtnText}>Yes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: '#ccc' }]}
-                onPress={() => setShowConfirmModal(false)}
-              >
-                <Text style={styles.modalBtnText}>Cancel</Text>
-              </TouchableOpacity>
+            </View>
+            <View style={styles.toggleTextContainer}>
+              <Text style={styles.toggleLabel}>Biometric Login</Text>
+              <Text style={styles.toggleDescription}>
+                Use {biometricTypeName} to sign in quickly and securely
+              </Text>
             </View>
           </View>
+          <Switch
+            value={biometricEnabled}
+            onValueChange={handleBiometricToggle}
+            trackColor={{ false: '#ddd', true: '#f0e7ef' }}
+            thumbColor={biometricEnabled ? '#581845' : '#999'}
+          />
         </View>
+      </View>
       )}
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={loading}>
+      <TouchableOpacity
+        style={[styles.saveButton, !hasChanges && !loading && styles.saveButtonDisabled]}
+        onPress={handleSave}
+        disabled={loading || !hasChanges}
+      >
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save Changes</Text>}
       </TouchableOpacity>
 
@@ -1217,6 +1482,22 @@ backText: {
   color: '#581845',
 },
 
+headerSaveBtn: {
+  width: 36,
+  height: 36,
+  borderRadius: 18,
+  backgroundColor: '#581845',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginRight: 4,
+},
+headerSaveBtnDisabled: {
+  backgroundColor: '#c4a8bc',
+},
+saveButtonDisabled: {
+  backgroundColor: '#c4a8bc',
+},
+
 headerTitle: {
   flex: 1,
   textAlign: 'center',
@@ -1226,12 +1507,99 @@ headerTitle: {
   paddingHorizontal: 8,
 },
 
+completionBanner: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#581845',
+  borderRadius: 12,
+  padding: 14,
+  marginTop: 12,
+  marginBottom: 4,
+},
+bannerTitle: {
+  color: '#fff',
+  fontSize: 15,
+  fontWeight: '700',
+  marginBottom: 2,
+},
+bannerText: {
+  color: 'rgba(255,255,255,0.9)',
+  fontSize: 13,
+  lineHeight: 18,
+},
+
 
   label: {
     marginTop: 15,
     marginBottom: 5,
     fontWeight: '600'
   },
+
+  // Recovery email section
+  recoverySection: {
+    marginTop: 20,
+    backgroundColor: '#faf5f8',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f0e0eb',
+  },
+  recoverySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  recoverySectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#581845',
+  },
+  recoveryDesc: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  recoveryVerified: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#f0faf0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  recoveryVerifiedText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  recoveryChangeLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#581845',
+  },
+  recoveryAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#581845',
+    borderStyle: 'dashed',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  recoveryAddText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#581845',
+  },
+
   input: {
 
 
@@ -1705,7 +2073,62 @@ headerTitle: {
     marginTop: 2,
   },
 
-
+  // ═══ Settings Card Styles ═══
+  settingsCard: {
+    backgroundColor: '#faf5f8',
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#f0e0eb',
+  },
+  settingsCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  settingsCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#581845',
+  },
+  sectionLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#222',
+    marginTop: 28,
+    marginBottom: 4,
+  },
+  biometricIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(88, 24, 69, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  profileBadge: {
+    position: 'absolute',
+    bottom: 6,
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(88,24,69,0.85)',
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    paddingVertical: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  profileBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
 
 });
 
@@ -1895,7 +2318,7 @@ headerTitle: {
 
 //     // IMPORTANT: Your backend should perform irreversible deletion of the account
 //     // and associated personal data (or queue it for deletion), then return 200.
-//     await axios.delete(`http://192.168.100.28:4000/accounts/${userId}`, {
+//     await axios.delete(`http://192.168.14.134:4000/accounts/${userId}`, {
 //       headers: { Authorization: `Bearer ${token}` },
 //       // If your backend supports soft vs hard deletes, pass a flag:
 //       params: { hard: true }
@@ -2161,7 +2584,7 @@ headerTitle: {
 //       };
 
 //       const res = await axios.put(
-//         `http://192.168.100.28:4000/accounts/${userId}`,
+//         `http://192.168.14.134:4000/accounts/${userId}`,
 //         payload,
 //         {
 //           headers: {

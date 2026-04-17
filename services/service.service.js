@@ -1,7 +1,8 @@
 // services/service.service.js
 import api from './api';
+import { API_BASE_URL } from '../config';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://three4th-street-backend.onrender.com';
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || API_BASE_URL;
 
 const serviceService = {
   // ===== PUBLIC SERVICES =====
@@ -68,7 +69,7 @@ const serviceService = {
     }
   },
 
-  // Get single service details
+  // Get single service details (public - approved only)
   getServiceDetail: async (serviceId) => {
     try {
       const response = await api.get(`/services/${serviceId}`);
@@ -78,6 +79,20 @@ const serviceService = {
       };
     } catch (error) {
       console.error('Error fetching service details:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get own service details (any status - authenticated)
+  getMyServiceDetail: async (serviceId) => {
+    try {
+      const response = await api.get(`/services/my-services/${serviceId}`);
+      return {
+        success: true,
+        data: response.data?.data || response.data,
+      };
+    } catch (error) {
+      console.error('Error fetching my service details:', error);
       return { success: false, error: error.message };
     }
   },
@@ -110,23 +125,23 @@ const serviceService = {
         title: serviceData.title,
         description: serviceData.description,
         category: serviceData.category,
-        subcategory: serviceData.subcategory,
-        hourlyRate: serviceData.hourlyRate || null,
-        basePrice: serviceData.basePrice || null,
-        currency: 'USD',
-        location: serviceData.location || {},
+        subcategory: serviceData.subcategory || '',
+        pricing: serviceData.pricing || '',
+        serviceLocation: serviceData.serviceLocation || '',
+        fullAddress: serviceData.fullAddress || '',
         city: serviceData.city || '',
         state: serviceData.state || '',
-        availability: serviceData.availability || [],
+        contactEmail: serviceData.contactEmail || '',
+        contactPhone: serviceData.contactPhone || '',
+        website: serviceData.website || '',
+        instagram: serviceData.instagram || '',
+        facebook: serviceData.facebook || '',
+        twitter: serviceData.twitter || '',
+        linkedin: serviceData.linkedin || '',
         experience: serviceData.experience || '',
         skills: serviceData.skills || [],
-        images: serviceData.images || [],
-        duration: serviceData.duration || null, // in hours
-        maxClients: serviceData.maxClients || null,
-        minNotice: serviceData.minNotice || '24h', // advance booking required
-        tags: serviceData.tags || [],
-        verified: false,
-        status: 'pending', // pending → admin review → approved/rejected
+        latitude: serviceData.latitude || undefined,
+        longitude: serviceData.longitude || undefined,
       });
 
       return {
@@ -143,7 +158,7 @@ const serviceService = {
     }
   },
 
-  // Update service (only if pending)
+  // Update service (marks as 'updated' if was approved, for admin re-review)
   updateService: async (serviceId, updates) => {
     try {
       const response = await api.put(`/services/${serviceId}`, updates);
@@ -225,6 +240,55 @@ const serviceService = {
         success: false, 
         error: error.response?.data?.message || error.message 
       };
+    }
+  },
+
+  // ===== REVIEWS =====
+
+  // Submit a review for a service
+  submitReview: async (serviceId, rating, text = '') => {
+    try {
+      const response = await api.post(`/services/${serviceId}/reviews`, { rating, text });
+      return {
+        success: true,
+        data: response.data?.data || response.data,
+        message: 'Review submitted.',
+      };
+    } catch (error) {
+      console.error('Error submitting review:', error);
+      return {
+        success: false,
+        error: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  // Get reviews for a service
+  getServiceReviews: async (serviceId, page = 1, limit = 20) => {
+    try {
+      const response = await api.get(`/services/${serviceId}/reviews?page=${page}&limit=${limit}`);
+      return {
+        success: true,
+        data: response.data?.data || [],
+        pagination: response.data?.pagination || {},
+      };
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  // Get review statistics (star distribution, Bayesian average)
+  getReviewStats: async (serviceId) => {
+    try {
+      const response = await api.get(`/services/${serviceId}/review-stats`);
+      return {
+        success: true,
+        data: response.data?.data || null,
+      };
+    } catch (error) {
+      console.error('Error fetching review stats:', error);
+      return { success: false, error: error.message, data: null };
     }
   },
 };

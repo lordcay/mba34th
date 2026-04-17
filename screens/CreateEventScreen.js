@@ -13,16 +13,23 @@ import {
   KeyboardAvoidingView,
   Keyboard,
   TouchableWithoutFeedback,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { AuthContext } from '../context/AuthContext';
 import eventService from '../services/event.service';
+import { geocodeAddress } from '../services/location.service';
 import Colors from '../constants/Colors';
 
 const ACCENT = Colors.primary || '#581845';
+const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/de2wocs21/image/upload';
+const UPLOAD_PRESET = 'unsigned_upload';
+const MAX_PHOTOS = 3;
 
 // Input Field Component
 const InputField = ({ 
@@ -69,6 +76,10 @@ const CreateEventScreen = ({ route }) => {
   const [fullAddress, setFullAddress] = useState(editEvent?.fullAddress || editEvent?.location || '');
   const [expectedAttendees, setExpectedAttendees] = useState(editEvent?.expectedAttendees?.toString() || editEvent?.maxAttendees?.toString() || '');
 
+  // Photos state (Cloudinary URLs, max 3)
+  const [photos, setPhotos] = useState(editEvent?.photos || []);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
   // Date & Time state
   const initialDate = editEvent?.date ? new Date(editEvent.date) : new Date();
   const [date, setDate] = useState(initialDate);
@@ -81,6 +92,86 @@ const CreateEventScreen = ({ route }) => {
   // Form state
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+
+  // --- Photo picker & Cloudinary upload ---
+  const pickEventPhoto = async () => {
+    if (photos.length >= MAX_PHOTOS) {
+      Alert.alert('Limit Reached', `You can upload a maximum of ${MAX_PHOTOS} photos.`);
+      return;
+    }
+
+    try {
+      let perm = await ImagePicker.getMediaLibraryPermissionsAsync();
+      if (!perm.granted) perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Permission Needed', 'Please allow photo access to upload event images.');
+        return;
+      }
+
+      // No allowsEditing — allow full flyer/poster designs without crop
+      const pickerOptions = { quality: 1, exif: false };
+      if (ImagePicker?.MediaType?.Image) {
+        pickerOptions.mediaTypes = [ImagePicker.MediaType.Image];
+      } else if (ImagePicker?.MediaTypeOptions?.Images) {
+        pickerOptions.mediaTypes = ImagePicker.MediaTypeOptions.Images;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
+      if (result.canceled) return;
+      const asset = result.assets?.[0];
+      if (!asset?.uri) return;
+
+      setUploadingPhoto(true);
+
+      // Smart resize: constrain longest edge to 1200px, keep aspect ratio for flyers
+      const resizeOps = [];
+      const maxDim = 1200;
+      if (asset.width && asset.height) {
+        if (asset.width > maxDim || asset.height > maxDim) {
+          if (asset.width >= asset.height) {
+            resizeOps.push({ resize: { width: maxDim } });
+          } else {
+            resizeOps.push({ resize: { height: maxDim } });
+          }
+        }
+      } else {
+        resizeOps.push({ resize: { width: maxDim } });
+      }
+
+      const manipulated = await ImageManipulator.manipulateAsync(
+        asset.uri,
+        resizeOps,
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // Upload to Cloudinary
+      const data = new FormData();
+      data.append('file', {
+        uri: manipulated.uri,
+        name: `event_${Date.now()}.jpg`,
+        type: 'image/jpeg',
+      });
+      data.append('upload_preset', UPLOAD_PRESET);
+
+      const uploadRes = await fetch(CLOUDINARY_URL, { method: 'POST', body: data });
+      const json = await uploadRes.json();
+
+      if (json.secure_url) {
+        setPhotos(prev => [...prev, json.secure_url]);
+      } else {
+        Alert.alert('Upload Failed', json?.error?.message || 'Please try again.');
+      }
+    } catch (e) {
+      console.log('pickEventPhoto error:', e);
+      Alert.alert('Upload Error', 'Could not upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhoto = (index) => {
+    setPhotos(prev => prev.filter((_, i) => i !== index));
+  };
 
   // Format date for display
   const formatDateDisplay = (d) => {
@@ -162,7 +253,21 @@ const CreateEventScreen = ({ route }) => {
         location: fullAddress.trim(),
         expectedAttendees: parseInt(expectedAttendees, 10),
         maxAttendees: parseInt(expectedAttendees, 10),
+        photos,
       };
+
+      // Geocode the address to get coordinates for distance calculations
+      try {
+        const coords = await geocodeAddress(fullAddress.trim());
+        if (coords) {
+          eventData.coordinates = {
+            type: 'Point',
+            coordinates: [coords.longitude, coords.latitude],
+          };
+        }
+      } catch (geoErr) {
+        console.log('Geocoding skipped:', geoErr?.message);
+      }
 
       let result;
       if (isEditMode) {
@@ -220,6 +325,43 @@ const CreateEventScreen = ({ route }) => {
 
             {/* Form Card */}
             <View style={styles.formCard}>
+              {/* Event Photos / Flyers */}
+              <View style={styles.photoSection}>
+                <Text style={styles.inputLabel}>
+                  <Ionicons name="images-outline" size={14} color={Colors.textSecondary} /> Event Photos / Flyers
+                </Text>
+                <Text style={styles.photoHelperText}>Add up to {MAX_PHOTOS} photos to promote your event</Text>
+                <View style={styles.photoGrid}>
+                  {photos.map((uri, index) => (
+                    <View key={index} style={styles.photoSlot}>
+                      <Image source={{ uri }} style={styles.photoImage} />
+                      <TouchableOpacity
+                        style={styles.photoRemoveBtn}
+                        onPress={() => removePhoto(index)}
+                      >
+                        <Ionicons name="close-circle" size={22} color="#E74C3C" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {photos.length < MAX_PHOTOS && (
+                    <TouchableOpacity
+                      style={styles.photoAddSlot}
+                      onPress={pickEventPhoto}
+                      disabled={uploadingPhoto}
+                    >
+                      {uploadingPhoto ? (
+                        <ActivityIndicator size="small" color={ACCENT} />
+                      ) : (
+                        <>
+                          <Ionicons name="camera-outline" size={28} color={ACCENT} />
+                          <Text style={styles.photoAddText}>Add Photo</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               {/* Event Title */}
               <InputField
                 label="Event Title"
@@ -415,6 +557,56 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 3,
+  },
+
+  // Photo Picker
+  photoSection: {
+    marginBottom: 24,
+  },
+  photoHelperText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  photoSlot: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#fff',
+    borderRadius: 11,
+  },
+  photoAddSlot: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: ACCENT,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F5EDF8',
+  },
+  photoAddText: {
+    fontSize: 11,
+    color: ACCENT,
+    fontWeight: '600',
+    marginTop: 4,
   },
 
   // Input Fields

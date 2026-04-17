@@ -1,10 +1,11 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { navigationRef } from '../navigation/RootNavigation';
+import { API_BASE_URL } from '../config';
 
 
 // Production URL
-const API_BASE_URL = "https://three4th-street-backend.onrender.com";
+// Using API_BASE_URL from config.js
 
 const api = axios.create({
   baseURL: API_BASE_URL,

@@ -23,6 +23,7 @@ import { getConnectionStatus, getConnectionCount, getMyConnections } from '../se
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const PostDetailScreen = ({ route, navigation }) => {
   const { postId, post: initialPost, onReactionChange } = route.params || {};
@@ -115,7 +116,7 @@ const PostDetailScreen = ({ route, navigation }) => {
   const getImageUrl = (url) => {
     if (!url) return null;
     if (url.startsWith('http')) return url;
-    return `http://192.168.100.28:4000${url.startsWith('/') ? '' : '/'}${url}`;
+    return `${API_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
   };
 
   // Poll helpers

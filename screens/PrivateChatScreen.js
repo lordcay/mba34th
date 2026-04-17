@@ -29,6 +29,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { navigate as rootNavigate } from '../navigation/RootNavigation';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import moment from 'moment';
@@ -42,6 +43,7 @@ import { showTopToast, playPing } from '../utils/notify';
 import { useUnread } from '../context/UnreadContext';
 import api from '../services/api';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import LinkPreview, { extractFirstUrl } from '../components/LinkPreview';
 
 // Media sharing imports
 import * as ImagePicker from 'expo-image-picker';
@@ -49,6 +51,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Contacts from 'expo-contacts';
 import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
+import { API_BASE_URL as BASE_URL } from '../config';
 
 // Cloudinary config
 const CLOUDINARY_CLOUD = 'de2wocs21';
@@ -63,7 +66,7 @@ const GIPHY_TRENDING_URL = `https://api.giphy.com/v1/gifs/trending?api_key=${GIP
 const GIPHY_SEARCH_URL = `https://api.giphy.com/v1/gifs/search?api_key=${GIPHY_API_KEY}&limit=30&rating=pg-13`;
 
 
-const BASE_URL = 'http://192.168.100.28:4000';
+// Using BASE_URL from config.js
 
 const HEADER_HEIGHT = 56;
 const MIN_INPUT_HEIGHT = 40;
@@ -1749,6 +1752,53 @@ useEffect(() => {
   //   }
   // };
 
+  // Render message text with clickable URLs
+  const renderFormattedText = (messageText) => {
+    if (!messageText) return null;
+    const text = typeof messageText === 'string' ? messageText : String(messageText);
+    
+    const urlPattern = /(https?:\/\/[^\s<>\"\']+|www\.[^\s<>\"\']+)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = urlPattern.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      parts.push(match[0]);
+      lastIndex = urlPattern.lastIndex;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    // If no URLs found, return plain text
+    if (parts.length <= 1) {
+      return <Text style={styles.messageText}>{text}</Text>;
+    }
+
+    return (
+      <Text style={styles.messageText}>
+        {parts.map((part, index) => {
+          if (/^https?:\/\//i.test(part) || /^www\./i.test(part)) {
+            const url = part.startsWith('www.') ? 'https://' + part : part;
+            return (
+              <Text
+                key={index}
+                style={{ color: '#1a73e8', textDecorationLine: 'underline' }}
+                onPress={() => rootNavigate('SupportWeb', { url, title: '' })}
+              >
+                {part}
+              </Text>
+            );
+          }
+          return <Text key={index}>{part}</Text>;
+        })}
+      </Text>
+    );
+  };
+
   const renderMessage = ({ item, index }) => {
     const isMine = asId(item.senderId) === String(userId);
     
@@ -1882,9 +1932,13 @@ useEffect(() => {
                 </View>
               </TouchableOpacity>
             ) : (
-              <Text style={styles.messageText}>
-                {item.message}
-              </Text>
+              <>
+                {renderFormattedText(item.message)}
+                {(() => {
+                  const linkUrl = extractFirstUrl(typeof item.message === 'string' ? item.message : '');
+                  return linkUrl ? <LinkPreview url={linkUrl} isMine={isMine} /> : null;
+                })()}
+              </>
             )}
             
             <Text style={styles.timestamp}>
@@ -3274,7 +3328,7 @@ composerInput: {
 //     // const [userData, setUserData] = useState(user); // <-- local state
 // const [userData, setUserData] = useState(normalize(user));
 
-// const api = axios.create({ baseURL: 'http://192.168.100.28:4000' });
+// const api = axios.create({ baseURL: 'http://192.168.14.134:4000' });
 
 //   // my display name for typing events
 //   const [myDisplayName, setMyDisplayName] = useState('Someone');
@@ -3297,7 +3351,7 @@ composerInput: {
 //     (async () => {
 //       try {
 //         const res = await axios.get(
-//           `http://192.168.100.28:4000/accounts/${userData.id || userData._id}`,
+//           `http://192.168.14.134:4000/accounts/${userData.id || userData._id}`,
 //           { headers: { Authorization: `Bearer ${token}` } }
 //         );
 //         setUserData(res.data.users || res.data);
@@ -3312,7 +3366,7 @@ composerInput: {
 // //     (async () => {
 // //       try {
 // //         const res = await axios.get(
-// //           `http://192.168.100.28:4000/accounts/${users.id || users._id}`,
+// //           `http://192.168.14.134:4000/accounts/${users.id || users._id}`,
 // //           { headers: { Authorization: `Bearer ${token}` } }
 // //         );
 // //         setUser(res.data.users || res.data);
@@ -3328,7 +3382,7 @@ composerInput: {
 //     (async () => {
 //       try {
 //         const res = await axios.get(
-//           `http://192.168.100.28:4000/accounts/${userData.id || userData._id}`,
+//           `http://192.168.14.134:4000/accounts/${userData.id || userData._id}`,
 //           { headers: { Authorization: `Bearer ${token}` } }
 //         );
 //         setUserData(res.data.users || res.data);
@@ -3379,7 +3433,7 @@ composerInput: {
 //       source={{
 //         uri: userData?.photos?.[0]?.startsWith('http')
 //           ? userData.photos[0]
-//           : `http://192.168.100.28:4000${userData?.photos?.[0] || ''}`,
+//           : `http://192.168.14.134:4000${userData?.photos?.[0] || ''}`,
 //       }}
 //       style={{
 //         width: 32, height: 32, borderRadius: 16, marginRight: 10,
@@ -3597,7 +3651,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.14.134:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -3611,7 +3665,7 @@ composerInput: {
 //     const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //     try {
-//       const res = await axios.post('http://192.168.100.28:4000/messages', payload, {
+//       const res = await axios.post('http://192.168.14.134:4000/messages', payload, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 
@@ -3902,7 +3956,7 @@ composerInput: {
 //           source={{
 //             uri: user?.photos?.[0]?.startsWith('http')
 //               ? user.photos[0]
-//               : `http://192.168.100.28:4000${user?.photos?.[0] || ''}`,
+//               : `http://192.168.14.134:4000${user?.photos?.[0] || ''}`,
 //           }}
 //           style={{
 //             width: 32, height: 32, borderRadius: 16, marginRight: 10,
@@ -4117,7 +4171,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.14.134:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -4131,7 +4185,7 @@ composerInput: {
 //     const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //     try {
-//       const res = await axios.post('http://192.168.100.28:4000/messages', payload, {
+//       const res = await axios.post('http://192.168.14.134:4000/messages', payload, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 
@@ -4500,7 +4554,7 @@ composerInput: {
 
 //   const fetchMessages = async () => {
 //     try {
-//       const res = await axios.get(`http://192.168.100.28:4000/messages/${user.id}`, {
+//       const res = await axios.get(`http://192.168.14.134:4000/messages/${user.id}`, {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       setMessages(res.data.reverse());
@@ -4514,7 +4568,7 @@ composerInput: {
 //   const payload = { senderId: userId, recipientId: user.id, message: input.trim() };
 
 //   try {
-//     await axios.post('http://192.168.100.28:4000/messages', payload, {
+//     await axios.post('http://192.168.14.134:4000/messages', payload, {
 //       headers: { Authorization: `Bearer ${token}` }
 //     });
 //     // Do NOT push into state here—socket 'message:new' will arrive and add it once.
@@ -4570,7 +4624,7 @@ composerInput: {
 //             source={{
 //               uri: user?.photos?.[0]?.startsWith('http')
 //                 ? user.photos[0]
-//                 : `http://192.168.100.28:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
+//                 : `http://192.168.14.134:4000${user.photos?.[0]}` || 'https://via.placeholder.com/150',
 //             }}
 //             style={styles.profileImage}
 //           />

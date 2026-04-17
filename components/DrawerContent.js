@@ -14,7 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { AuthContext } from '../context/AuthContext';
+import { useUnread } from '../context/UnreadContext';
 import { getMyConnections } from '../services/connection.service';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SCREEN_HEIGHT = Dimensions.get('screen').height; // Use screen height to include nav bars
@@ -34,31 +36,49 @@ const PURPLE_HINT = 'rgba(88, 24, 69, 0.15)';
 const WHITE_GLOW = 'rgba(255, 255, 255, 0.03)';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const DrawerContent = ({ onClose, navigation }) => {
   const { user, logout } = useContext(AuthContext);
+  const { state: unreadState } = useUnread();
   const insets = useSafeAreaInsets();
   
-  // Connections state
-  const [connectionsCount, setConnectionsCount] = useState(0);
+  // DM unread count for badge
+  const dmUnreadCount = Object.values(unreadState?.dmByUserId || {}).reduce((a, b) => a + b, 0);
   
-  // Fetch connections count on mount
+  // Connections state — cache-first to avoid "0" flash
+  const [connectionsCount, setConnectionsCount] = useState(null);
+  
   useEffect(() => {
+    let cancelled = false;
+
+    // 1. Load cached count instantly
+    AsyncStorage.getItem('drawer_connections_count')
+      .then(cached => {
+        if (!cancelled && cached !== null) setConnectionsCount(Number(cached));
+      })
+      .catch(() => {});
+
+    // 2. Fetch fresh count from API
     const fetchConnectionsCount = async () => {
       try {
         const connectionsData = await getMyConnections();
-        // Handle both array and object response formats
         const connectionsList = Array.isArray(connectionsData) 
           ? connectionsData 
           : connectionsData?.connections || [];
-        setConnectionsCount(connectionsList.length);
+        const count = connectionsList.length;
+        if (!cancelled) {
+          setConnectionsCount(count);
+          AsyncStorage.setItem('drawer_connections_count', String(count)).catch(() => {});
+        }
       } catch (error) {
         console.log('Error fetching connections:', error);
-        setConnectionsCount(0);
+        if (!cancelled && connectionsCount === null) setConnectionsCount(0);
       }
     };
     
     fetchConnectionsCount();
+    return () => { cancelled = true; };
   }, []);
 
   // Extract user info
@@ -90,13 +110,13 @@ const DrawerContent = ({ onClose, navigation }) => {
     return String(loc);
   };
   
-  const country = user?.country || normalizeLocation(user?.location) || '';
+  const country = user?.currentCity || user?.country || normalizeLocation(user?.location) || '';
 
   // Profile image
   const userProfileImage = user?.photos?.[0]
     ? (user.photos[0].startsWith('http')
         ? user.photos[0]
-        : `https://three4th-street-backend.onrender.com${user.photos[0]}`)
+        : `${API_BASE_URL}${user.photos[0]}`)
     : null;
 
   const handleLogout = () => {
@@ -252,9 +272,13 @@ const DrawerContent = ({ onClose, navigation }) => {
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 5, right: 10 }}
               >
-                <Text style={styles.connectionsInline}>
-                  {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'}
-                </Text>
+                {connectionsCount === null ? (
+                  <View style={styles.connectionsShimmer} />
+                ) : (
+                  <Text style={styles.connectionsInline}>
+                    {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'}
+                  </Text>
+                )}
               </TouchableOpacity>
             </View>
           ) : (
@@ -265,9 +289,13 @@ const DrawerContent = ({ onClose, navigation }) => {
               activeOpacity={0.7}
             >
               <Ionicons name="people" size={12} color="rgba(167,139,186,0.8)" style={{ marginRight: 4 }} />
-              <Text style={styles.connectionsInline}>
-                {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'}
-              </Text>
+              {connectionsCount === null ? (
+                <View style={styles.connectionsShimmer} />
+              ) : (
+                <Text style={styles.connectionsInline}>
+                  {connectionsCount} {connectionsCount === 1 ? 'connection' : 'connections'}
+                </Text>
+              )}
             </TouchableOpacity>
           )}
         </TouchableOpacity>
@@ -277,6 +305,13 @@ const DrawerContent = ({ onClose, navigation }) => {
 
         {/* Menu Items */}
         <View style={styles.menuSection}>
+          <MenuItem
+            icon="chatbubble-ellipses-outline"
+            label="Messages"
+            badge={dmUnreadCount}
+            onPress={() => navigateTo('Chat')}
+          />
+          
           <MenuItem
             icon="chatbubbles-outline"
             label="Chat Rooms"
@@ -299,12 +334,6 @@ const DrawerContent = ({ onClose, navigation }) => {
             icon="briefcase-outline"
             label="Services"
             onPress={() => navigateTo('Services')}
-          />
-          
-          <MenuItem
-            icon="bookmark-outline"
-            label="Saved Posts"
-            onPress={() => {}}
           />
 
           <MenuItem
@@ -521,6 +550,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(167,139,186,0.9)',
     fontWeight: '500',
+  },
+  connectionsShimmer: {
+    width: 90,
+    height: 13,
+    borderRadius: 4,
+    backgroundColor: 'rgba(167,139,186,0.15)',
   },
   connectionsOnlyRow: {
     flexDirection: 'row',

@@ -16,6 +16,7 @@ import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { API_BASE_URL } from '../config';
 
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/de2wocs21/image/upload';
 const UPLOAD_PRESET = 'unsigned_upload';
@@ -127,7 +128,7 @@ const EditProfileScreen = ({ navigation }) => {
             };
 
             const res = await axios.put(
-                `https://three4th-street-backend.onrender.com/accounts/${userId}`,
+                `${API_BASE_URL}/accounts/${userId}`,
                 payload,
                 { headers: { Authorization: `Bearer ${token}` } }
             );

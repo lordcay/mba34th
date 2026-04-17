@@ -27,10 +27,13 @@ import { AuthContext } from "../context/AuthContext";
 import { useNavigation } from "@react-navigation/native";
 import api from "../services/api";
 import OnboardingOverlay from "../components/OnboardingOverlay";
+import RichTextRenderer from "../components/RichTextRenderer";
+import LinkPreview, { extractFirstUrl } from "../components/LinkPreview";
 
 
 
 
+import { API_BASE_URL } from '../config';
 import {
   getTodayGist,
   voteOnGist,
@@ -414,7 +417,8 @@ const goToProfile = async (comment) => {
           <Text style={styles.title}>{post.title}</Text>
 
           {!!post.image && <Image source={{ uri: post.image }} style={styles.hero} />}
-          {!!post.body && <Text style={styles.body}>{post.body}</Text>}
+          {!!post.body && <RichTextRenderer text={post.body} style={styles.body} />}
+          {!!post.body && extractFirstUrl(post.body) && <LinkPreview url={extractFirstUrl(post.body)} />}
 
           {/* <Text style={styles.take}>What’s your take?</Text> */}
 
@@ -496,7 +500,7 @@ const goToProfile = async (comment) => {
       source={{
         uri: c.photo.startsWith("http")
           ? c.photo
-          : `http://192.168.100.28:4000${c.photo}`,
+          : `${API_BASE_URL}${c.photo}`,
       }}
       style={styles.avatarImg}
     />
@@ -524,7 +528,8 @@ const goToProfile = async (comment) => {
 
       </View>
 
-      <Text style={styles.commentText}>{c.text}</Text>
+      <RichTextRenderer text={c.text} style={styles.commentText} />
+      {extractFirstUrl(c.text) && <LinkPreview url={extractFirstUrl(c.text)} />}
     </View>
   </View>
 ))}

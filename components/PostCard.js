@@ -25,11 +25,13 @@ import { sendConnectionRequest, cancelConnectionRequest, getConnectionStatus, ge
 import { socket } from '../socket';
 import Colors from '../constants/Colors';
 import RichTextRenderer from './RichTextRenderer';
+import LinkPreview, { extractFirstUrl } from './LinkPreview';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN_H = 20;
 const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN_H * 2;
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDelete }) => {
   const { user } = useContext(AuthContext);
@@ -650,7 +652,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
   // Format image URL
   const getImageUrl = (url) => {
     if (!url) return null;
-    return url.startsWith('http') ? url : `https://three4th-street-backend.onrender.com${url}`;
+    return url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
   };
   
   // Author profile image
@@ -865,7 +867,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
   const getConnectionImage = (connection) => {
     const img = connection?.profileImage || connection?.photos?.[0];
     if (!img) return null;
-    return img.startsWith('http') ? img : `https://three4th-street-backend.onrender.com${img}`;
+    return img.startsWith('http') ? img : `${API_BASE_URL}${img}`;
   };
 
   return (
@@ -962,9 +964,8 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
             }
           }}
         />
+        {extractFirstUrl(post.content) && <LinkPreview url={extractFirstUrl(post.content)} />}
       </View>
-      
-      {/* Images */}
       {images.length > 0 && (
         <View style={styles.imagesSection}>
           <Animated.FlatList
@@ -1398,7 +1399,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
                                     {reply.userId?.firstName} {reply.userId?.lastName}
                                   </Text>
                                 </TouchableOpacity>
-                                <Text style={styles.inlineReplyText}>{reply.text}</Text>
+                                <RichTextRenderer text={reply.text} style={styles.inlineReplyText} />
                               </View>
                               <View style={styles.inlineReplyActions}>
                                 <Text style={styles.inlineCommentTime}>
@@ -2381,7 +2382,7 @@ const PostCard = ({ post, navigation, onPostUpdate, onOriginalPostUpdate, onDele
                                       {reply.userId?.firstName} {reply.userId?.lastName}
                                     </Text>
                                   </TouchableOpacity>
-                                  <Text style={styles.replyText}>{reply.text}</Text>
+                                  <RichTextRenderer text={reply.text} style={styles.replyText} />
                                 </View>
                                 <View style={styles.replyActions}>
                                   <Text style={styles.replyTime}>

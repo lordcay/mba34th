@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { Alert, AppState, Vibration } from 'react-native';
+import React, { createContext, useContext, useEffect, useState, useRef, useCallback } from 'react';
+import { AppState, Vibration } from 'react-native';
 import { socket } from '../socket';
 import { AuthContext } from './AuthContext';
 import { navigationRef } from '../navigation/RootNavigation';
@@ -19,87 +19,48 @@ export const CallProvider = ({ children }) => {
   useEffect(() => {
     if (!userId) return;
 
-    // Listen for incoming calls
-    socket.on('call:incoming', handleIncomingCall);
+    // Only listen for incoming calls here — all other call events
+    // (rejected, ended, busy, unavailable) are handled by CallScreen
+    // to avoid duplicate socket listener conflicts.
+    const onIncomingCall = (callData) => {
+      console.log('📞 Incoming call:', callData);
 
-    // Listen for call rejection (when we're the caller)
-    socket.on('call:rejected', handleCallRejected);
+      // Check if we're already on a call
+      if (activeCall) {
+        socket.emit('call:busy', {
+          callerId: callData.callerId,
+          calleeId: userId,
+        });
+        return;
+      }
 
-    // Listen for call end
-    socket.on('call:ended', handleCallEnded);
+      setIncomingCall(callData);
+      setActiveCall({ callId: callData.callId, peerId: callData.callerId });
 
-    // When other user is busy
-    socket.on('call:busy', handleBusy);
+      // Navigate to CallScreen
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Call', {
+          isIncoming: true,
+          callType: callData.callType,
+          callerId: callData.callerId,
+          callerName: callData.callerName,
+          callerPhoto: callData.callerPhoto,
+        });
+      }
+    };
 
-    // User unavailable
-    socket.on('call:unavailable', handleUnavailable);
+    socket.on('call:incoming', onIncomingCall);
 
     return () => {
-      socket.off('call:incoming');
-      socket.off('call:rejected');
-      socket.off('call:ended');
-      socket.off('call:busy');
-      socket.off('call:unavailable');
+      socket.off('call:incoming', onIncomingCall);
       stopRingtone();
     };
-  }, [userId]);
-
-  const handleIncomingCall = async (callData) => {
-    console.log('📞 Incoming call:', callData);
-    
-    // Check if we're already on a call
-    if (activeCall) {
-      socket.emit('call:busy', {
-        callerId: callData.callerId,
-        calleeId: userId,
-      });
-      return;
-    }
-    
-    setIncomingCall(callData);
-    
-    // Navigate to CallScreen
-    if (navigationRef.isReady()) {
-      navigationRef.navigate('Call', {
-        isIncoming: true,
-        callType: callData.callType,
-        callerId: callData.callerId,
-        callerName: callData.callerName,
-        callerPhoto: callData.callerPhoto,
-      });
-    }
-  };
-
-  const handleCallRejected = ({ reason }) => {
-    console.log('Call rejected:', reason);
-    setActiveCall(null);
-    setIncomingCall(null);
-    stopRingtone();
-  };
-
-  const handleCallEnded = ({ reason }) => {
-    console.log('Call ended:', reason);
-    setActiveCall(null);
-    setIncomingCall(null);
-    stopRingtone();
-  };
-
-  const handleBusy = () => {
-    console.log('User is busy');
-    setActiveCall(null);
-    stopRingtone();
-  };
-
-  const handleUnavailable = ({ reason }) => {
-    console.log('User unavailable:', reason);
-    setActiveCall(null);
-    stopRingtone();
-  };
+  }, [userId, activeCall]);
 
   const playRingtone = async () => {
     try {
       if (ringtoneRef.current) return;
-      
+
       const { sound } = await Audio.Sound.createAsync(
         require('../assets/notification.m4r'),
         { isLooping: true }
@@ -124,15 +85,15 @@ export const CallProvider = ({ children }) => {
     Vibration.cancel();
   };
 
-  const setCurrentCall = (call) => {
+  const setCurrentCall = useCallback((call) => {
     setActiveCall(call);
-  };
+  }, []);
 
-  const clearCall = () => {
+  const clearCall = useCallback(() => {
     setActiveCall(null);
     setIncomingCall(null);
     stopRingtone();
-  };
+  }, []);
 
   const value = {
     incomingCall,

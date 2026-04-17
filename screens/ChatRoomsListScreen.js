@@ -25,7 +25,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 
 // ── API ────────────────────────────────────────────────────────────
-const API_URL = 'http://192.168.100.28:4000/chatrooms';
+const API_URL = `${API_BASE_URL}/chatrooms`;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ── Local Images (make sure these files exist in /assets) ─────────
@@ -35,6 +35,7 @@ import IMG_ALU from '../assets/1.jpg';
 import IMG_OPP from '../assets/4.jpg';
 import IMG_EV from '../assets/5.jpg';
 import IMG_FH from '../assets/6.jpg';
+import { API_BASE_URL } from '../config';
 
 const CHATROOM_IMAGES = {
     'The Village Drum': IMG_VILLAGE,

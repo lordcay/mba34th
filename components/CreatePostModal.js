@@ -26,6 +26,7 @@ import { getMyConnections } from '../services/connection.service';
 import Colors from '../constants/Colors';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 // Cloudinary config (same as used in PrivateChatScreen)
 const CLOUDINARY_CLOUD = 'de2wocs21';
@@ -174,11 +175,11 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }) => {
   const userProfileImage = user?.photos?.[0] 
     ? (user.photos[0].startsWith('http') 
         ? user.photos[0] 
-        : `https://three4th-street-backend.onrender.com${user.photos[0]}`)
+        : `${API_BASE_URL}${user.photos[0]}`)
     : (user?.profileImage
         ? (user.profileImage.startsWith('http')
             ? user.profileImage
-            : `https://three4th-street-backend.onrender.com${user.profileImage}`)
+            : `${API_BASE_URL}${user.profileImage}`)
         : null);
   
   // Upload to Cloudinary
@@ -667,7 +668,7 @@ const CreatePostModal = ({ visible, onClose, onPostCreated }) => {
               {images.map((img, index) => (
                 <View key={index} style={styles.imagePreviewWrap}>
                   <Image
-                    source={{ uri: img.startsWith('http') ? img : `https://three4th-street-backend.onrender.com${img}` }}
+                    source={{ uri: img.startsWith('http') ? img : `${API_BASE_URL}${img}` }}
                     style={styles.imagePreview}
                   />
                   <TouchableOpacity 

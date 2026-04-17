@@ -1,8 +1,9 @@
 // components/RichTextRenderer.js
-// Renders text with clickable hashtags (#) and mentions (@)
+// Renders text with clickable hashtags (#), mentions (@), and URLs
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { navigate as rootNavigate } from '../navigation/RootNavigation';
 import Colors from '../constants/Colors';
 
 /**
@@ -26,13 +27,14 @@ const RichTextRenderer = ({
 
   if (!text) return null;
 
+  // Ensure text is a string
+  const inputString = typeof text === 'string' ? text : String(text);
+
   // Parse text into segments
   const parseText = (inputText) => {
     const segments = [];
-    // Regex to match hashtags and mentions
-    // Hashtag: # followed by word characters
-    // Mention: @ followed by word characters (username or full name)
-    const regex = /(#[\w\u0080-\uFFFF]+)|(@[\w\u0080-\uFFFF]+(?:\s[\w\u0080-\uFFFF]+)?)/g;
+    // Regex to match URLs, hashtags, and mentions
+    const regex = /(https?:\/\/[^\s<>\"\']+|www\.[^\s<>\"\']+)|(#[\w\u0080-\uFFFF]+)|(@[\w\u0080-\uFFFF]+(?:\s[\w\u0080-\uFFFF]+)?)/g;
     
     let lastIndex = 0;
     let match;
@@ -46,9 +48,20 @@ const RichTextRenderer = ({
         });
       }
 
-      // Determine if it's a hashtag or mention
+      // Determine if it's a URL, hashtag, or mention
       const matchedText = match[0];
-      if (matchedText.startsWith('#')) {
+      if (match[1]) {
+        // URL match
+        let url = matchedText;
+        if (url.startsWith('www.')) {
+          url = 'https://' + url;
+        }
+        segments.push({
+          type: 'url',
+          content: matchedText,
+          value: url,
+        });
+      } else if (matchedText.startsWith('#')) {
         segments.push({
           type: 'hashtag',
           content: matchedText,
@@ -109,11 +122,27 @@ const RichTextRenderer = ({
     }
   };
 
-  const segments = parseText(text);
+  const handleUrlPress = (url) => {
+    rootNavigate('SupportWeb', { url, title: '' });
+  };
+
+  const segments = parseText(inputString);
 
   return (
     <Text style={style} numberOfLines={numberOfLines}>
       {segments.map((segment, index) => {
+        if (segment.type === 'url') {
+          return (
+            <Text
+              key={index}
+              style={styles.url}
+              onPress={() => handleUrlPress(segment.value)}
+            >
+              {segment.content}
+            </Text>
+          );
+        }
+
         if (segment.type === 'hashtag') {
           return (
             <Text
@@ -145,6 +174,10 @@ const RichTextRenderer = ({
 };
 
 const styles = StyleSheet.create({
+  url: {
+    color: '#1a73e8',
+    textDecorationLine: 'underline',
+  },
   hashtag: {
     color: Colors.primary,
     fontWeight: '600',

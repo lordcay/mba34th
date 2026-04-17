@@ -30,6 +30,7 @@ const BRAND_PURPLE = '#581845';
 const BRAND_PURPLE_LIGHT = '#7b2d62';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 const ConnectionsScreen = () => {
   const navigation = useNavigation();
@@ -104,7 +105,7 @@ const ConnectionsScreen = () => {
   const getProfileImage = (u) => {
     const photo = u?.photos?.[0];
     if (!photo) return null;
-    return photo.startsWith('http') ? photo : `https://three4th-street-backend.onrender.com${photo}`;
+    return photo.startsWith('http') ? photo : `${API_BASE_URL}${photo}`;
   };
 
   const getTimeAgo = (dateString) => {

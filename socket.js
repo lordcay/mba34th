@@ -1,2 +1,3 @@
 import { io } from 'socket.io-client';
-export const socket = io('https://three4th-street-backend.onrender.com'); // Production backend
+import { API_BASE_URL } from './config';
+export const socket = io(API_BASE_URL);

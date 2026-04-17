@@ -19,6 +19,7 @@ import {
 import LottieView from 'lottie-react-native';
 
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 
 const VerifyOTPScreen = () => {
@@ -61,7 +62,7 @@ const VerifyOTPScreen = () => {
     }
 
     try {
-      const response = await axios.post('http://192.168.100.28:4000/accounts/verify-email', { token: otp });
+      const response = await axios.post(API_BASE_URL + '/accounts/verify-email', { token: otp });
 
       console.log("✅ Verification Response:", response.data);
 

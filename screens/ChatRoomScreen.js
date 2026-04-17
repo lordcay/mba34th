@@ -13,6 +13,7 @@ import { socket } from '../socket';
 import axios from 'axios';
 import EmojiSelector from 'react-native-emoji-selector';
 import { useNavigation, useRoute, useIsFocused } from '@react-navigation/native';
+import { navigate as rootNavigate } from '../navigation/RootNavigation';
 
 // import { useNavigation, useRoute } from '@react-navigation/native';
 import { useHeaderHeight } from '@react-navigation/elements';
@@ -22,6 +23,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { showTopToast, playPing } from '../utils/notify';
  import { useUnread } from '../context/UnreadContext';
  import containsObjectionableContent from '../utils/filterObjectionableContent'; // adjust path if needed
+ import LinkPreview, { extractFirstUrl } from '../components/LinkPreview';
  import { 
    getMyConnections, 
    getConnectionStatus, 
@@ -30,16 +32,14 @@ import { showTopToast, playPing } from '../utils/notify';
    cancelConnectionRequest 
  } from '../services/connection.service';
 import OnboardingOverlay from '../components/OnboardingOverlay';
-
-
-
+import { API_BASE_URL as BASE_URL } from '../config';
 
 import {
   SafeAreaView as SASafeAreaView,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// Using BASE_URL from config.js
 const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 const SOCKET_SERVER_URL = BASE_URL;
 
@@ -612,20 +612,44 @@ const lastTypedAtRef = useRef(0);
     return String(messageText);
   };
 
-  // Render message text with @mentions and #hashtags highlighted
+  // Render message text with @mentions, #hashtags, and URLs highlighted
   const renderFormattedText = (messageText) => {
     const normalized = normalizeMessageText(messageText);
     if (!normalized) return null;
 
-    // Pattern to match @mentions and #hashtags
-    const pattern = /(@\w+(?:_\w+)?|#\w+)/g;
-    const parts = String(normalized).split(pattern);
+    // Pattern to match URLs, @mentions, and #hashtags
+    const pattern = /(https?:\/\/[^\s<>\"\']+|www\.[^\s<>\"\']+)|(@\w+(?:_\w+)?|#\w+)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = pattern.exec(normalized)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(normalized.slice(lastIndex, match.index));
+      }
+      parts.push(match[0]);
+      lastIndex = pattern.lastIndex;
+    }
+    if (lastIndex < normalized.length) {
+      parts.push(normalized.slice(lastIndex));
+    }
 
     return (
       <Text style={styles.messageText}>
         {parts.map((part, index) => {
           const display = part == null ? '' : String(part);
-          if (display.startsWith('@')) {
+          if (/^https?:\/\//i.test(display) || /^www\./i.test(display)) {
+            const url = display.startsWith('www.') ? 'https://' + display : display;
+            return (
+              <Text
+                key={index}
+                style={{ color: '#1a73e8', textDecorationLine: 'underline' }}
+                onPress={() => rootNavigate('SupportWeb', { url, title: '' })}
+              >
+                {display}
+              </Text>
+            );
+          } else if (display.startsWith('@')) {
             return (
               <Text key={index} style={styles.mentionText}>
                 {display}
@@ -1253,6 +1277,13 @@ useEffect(() => {
 
               {/* Message text */}
               {renderFormattedText(item.message)}
+
+              {/* Link preview */}
+              {(() => {
+                const msgText = typeof item.message === 'string' ? item.message : '';
+                const linkUrl = extractFirstUrl(msgText);
+                return linkUrl ? <LinkPreview url={linkUrl} isMine={isMyMessage} /> : null;
+              })()}
 
               {/* Footer: time + actions */}
               <View style={styles.messageFooter}>
@@ -2115,7 +2146,7 @@ const styles = StyleSheet.create({
 //   useSafeAreaInsets,
 // } from 'react-native-safe-area-context';
 
-// const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// // Using BASE_URL from config.js
 // const API_MESSAGES_URL = `${BASE_URL}/api/chatroom-messages`;
 // const SOCKET_SERVER_URL = BASE_URL;
 

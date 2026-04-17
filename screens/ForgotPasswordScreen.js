@@ -9,10 +9,17 @@ import {
     ActivityIndicator,
     Alert,
     Platform,
+    ScrollView,
+    Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { API_BASE_URL } from '../config';
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const scale = (size) => Math.round((SCREEN_W / 375) * size);
 
 
  
@@ -49,7 +56,7 @@ const ForgotPasswordScreen = ({ navigation }) => {
 
         try {
             setLoading(true);
-            const response = await axios.post('http://192.168.100.28:4000/accounts/forgot-password', {
+            const response = await axios.post(API_BASE_URL + '/accounts/forgot-password', {
                 email,
             });
 

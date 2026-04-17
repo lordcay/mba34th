@@ -48,7 +48,7 @@
 
 //     try {
 //       const response = await axios.post(
-//         'http://192.168.100.28:4000/accounts/authenticate',
+//         'http://192.168.14.134:4000/accounts/authenticate',
 //         { email: email.trim(), password: password.trim() }
 //       );
 //       const { token, id, user } = response.data;
@@ -247,7 +247,7 @@
 
 
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   Text,
@@ -262,6 +262,7 @@ import {
   TouchableWithoutFeedback,
   ScrollView,
   Image,
+  Animated,
 } from 'react-native';
 import Entypo from 'react-native-vector-icons/Entypo';
 import AntDesign from 'react-native-vector-icons/AntDesign';
@@ -273,6 +274,16 @@ import { useNavigation } from '@react-navigation/native';
 import logo2 from '../assets/logo1.png';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { API_BASE_URL } from '../config';
+import {
+  isBiometricSupported,
+  isBiometricEnabled,
+  getBiometricCredentials,
+  getBiometricTypeName,
+  authenticateWithBiometrics,
+  saveBiometricCredentials,
+} from '../services/biometric.service';
 
 
 
@@ -281,17 +292,100 @@ const LoginScreen = () => {
   const [password, setPassword] = useState('');
   const [secureText, setSecureText] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricType, setBiometricType] = useState('Biometrics');
+  const [biometricPulse] = useState(new Animated.Value(1));
   const navigation = useNavigation();
-  // const { login } = useContext(AuthContext);
   const { login, checkProfileCompletion } = useContext(AuthContext);
 
+  // Check biometric availability on mount
+  useEffect(() => {
+    checkBiometricAvailability();
+  }, []);
+
+  // Pulse animation for biometric button
+  useEffect(() => {
+    if (biometricAvailable) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(biometricPulse, { toValue: 1.05, duration: 1200, useNativeDriver: true }),
+          Animated.timing(biometricPulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        ])
+      ).start();
+    }
+  }, [biometricAvailable]);
+
+  const checkBiometricAvailability = async () => {
+    const { supported } = await isBiometricSupported();
+    const enabled = await isBiometricEnabled();
+    const creds = await getBiometricCredentials();
+    if (supported && enabled && creds) {
+      setBiometricAvailable(true);
+      const typeName = await getBiometricTypeName();
+      setBiometricType(typeName);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    try {
+      setLoading(true);
+
+      const authResult = await authenticateWithBiometrics(
+        `Sign in with ${biometricType}`
+      );
+
+      if (!authResult.success) {
+        setLoading(false);
+        return;
+      }
+
+      // Get stored credentials from Secure Store
+      const creds = await getBiometricCredentials();
+      if (!creds) {
+        Alert.alert('Biometric Login', 'No saved credentials found. Please sign in with your email and password.');
+        setLoading(false);
+        return;
+      }
+
+      // Verify stored token is still valid by calling user endpoint
+      const verifyRes = await axios.get(
+        `${API_BASE_URL}/accounts/${creds.userId}`,
+        { headers: { Authorization: `Bearer ${creds.token}` } }
+      ).catch(() => null);
+
+      if (!verifyRes?.data?.user) {
+        Alert.alert(
+          'Session Expired',
+          'Your saved session has expired. Please sign in with your email and password.',
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Token is still valid — log in directly
+      await login(creds.token, creds.userId, creds.email);
+
+      const storedUser = await AsyncStorage.getItem('user');
+      const parsedUser = JSON.parse(storedUser);
+
+      if (checkProfileCompletion(parsedUser)) {
+        navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
+      } else {
+        navigation.reset({ index: 0, routes: [{ name: 'EditProfile' }] });
+      }
+    } catch (error) {
+      Alert.alert('Login Failed', 'Biometric login failed. Please try with email and password.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const openSupport = () => {
-  navigation.navigate('SupportWeb', {
-    title: 'Support',
-    url: 'https://34thstreet.net/app-support/',
-  });
-};
+    navigation.navigate('SupportWeb', {
+      title: 'Support',
+      url: 'https://34thstreet.net/app-support/',
+    });
+  };
 
 
   const signInUser = async () => {
@@ -304,19 +398,42 @@ const LoginScreen = () => {
 
     try {
       const response = await axios.post(
-        'http://192.168.100.28:4000/accounts/authenticate',
+        API_BASE_URL + '/accounts/authenticate',
         { email: email.trim(), password: password.trim() }
       );
       const { token, id, user } = response.data;
 
-      // 1️⃣ Login & store user
-      await login(token, id);
+      // 1️⃣ Login & store user (pass email for biometric credential update)
+      await login(token, id, email.trim());
 
       // 2️⃣ Get stored user back from AsyncStorage
       const storedUser = await AsyncStorage.getItem('user');
       const parsedUser = JSON.parse(storedUser);
 
-      // 3️⃣ Check profile completion
+      // 3️⃣ Offer biometric setup if device supports it and not yet enabled
+      const { supported } = await isBiometricSupported();
+      const bioEnabled = await isBiometricEnabled();
+      if (supported && !bioEnabled) {
+        const typeName = await getBiometricTypeName();
+        Alert.alert(
+          `Enable ${typeName} Login?`,
+          `Sign in faster next time using ${typeName}. You can change this later in your profile settings.`,
+          [
+            { text: 'Not Now', style: 'cancel' },
+            {
+              text: 'Enable',
+              onPress: async () => {
+                const authResult = await authenticateWithBiometrics(`Enable ${typeName}`);
+                if (authResult.success) {
+                  await saveBiometricCredentials(email.trim(), token, id);
+                }
+              },
+            },
+          ]
+        );
+      }
+
+      // 4️⃣ Check profile completion
       if (checkProfileCompletion(parsedUser)) {
         // Profile is complete, go to full app
         navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
@@ -356,7 +473,7 @@ const LoginScreen = () => {
               <View style={styles.inputCard}>
                 <FontAwesome name="envelope-o" size={20} color="#581845" />
                 <TextInput
-                  placeholder="Email address"
+                  placeholder="School or recovery email"
                   placeholderTextColor="#999"
                   style={styles.input}
                   value={email}
@@ -389,20 +506,40 @@ const LoginScreen = () => {
                 <Text style={styles.loginText}>Sign In</Text>
               </TouchableOpacity>
 
+              {/* Biometric Login Button */}
+              {biometricAvailable && (
+                <Animated.View style={[styles.biometricContainer, { transform: [{ scale: biometricPulse }] }]}>
+                  <TouchableOpacity
+                    onPress={handleBiometricLogin}
+                    style={styles.biometricButton}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.biometricIconWrap}>
+                      <MaterialCommunityIcons
+                        name={biometricType === 'Face ID' ? 'face-recognition' : 'fingerprint'}
+                        size={32}
+                        color="#581845"
+                      />
+                    </View>
+                    <Text style={styles.biometricText}>Sign in with {biometricType}</Text>
+                  </TouchableOpacity>
+                </Animated.View>
+              )}
+
               <TouchableOpacity onPress={() => navigation.navigate('ForgotPasswordScreen')}>
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={() => navigation.navigate('NameScreen')}>
-                <Text style={styles.registerLink}>Don’t have an account? Register</Text>
+                <Text style={styles.registerLink}>Don't have an account? Register</Text>
               </TouchableOpacity>
 
               <TouchableOpacity onPress={openSupport} style={styles.supportRow}>
-  <Ionicons name="help-circle-outline" size={18} color="#581845" />
-  <Text style={styles.supportText}>
-    Need help? Visit our Support Center
-  </Text>
-</TouchableOpacity>
+                <Ionicons name="help-circle-outline" size={18} color="#581845" />
+                <Text style={styles.supportText}>
+                  Need help? Visit our Support Center
+                </Text>
+              </TouchableOpacity>
 
             </ScrollView>
           </KeyboardAvoidingView>
@@ -505,18 +642,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
   },
+  biometricContainer: {
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 4,
+  },
+  biometricButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(88, 24, 69, 0.06)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(88, 24, 69, 0.2)',
+    borderRadius: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  biometricIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(88, 24, 69, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  biometricText: {
+    color: '#581845',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   supportRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-  marginTop: 30,
-  gap: 8,
-},
-supportText: {
-  color: '#581845',
-  fontSize: 14,
-  fontWeight: '600',
-  textDecorationLine: 'underline',
-},
-
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 30,
+    gap: 8,
+  },
+  supportText: {
+    color: '#581845',
+    fontSize: 14,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
 });

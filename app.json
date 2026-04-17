@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.7",
+    "version": "1.1.8",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -28,6 +28,9 @@
         "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
         "NSCameraUsageDescription": "We need camera access for video calls and profile pictures.",
         "NSMicrophoneUsageDescription": "We need microphone access for voice and video calls.",
+        "NSFaceIDUsageDescription": "Use Face ID to sign in to your 34th Street account quickly and securely.",
+        "NSCalendarsUsageDescription": "34th Street may access your calendar to help you schedule and manage events.",
+        "NSCalendarsFullAccessUsageDescription": "34th Street needs full calendar access to help you schedule and manage events.",
         "LSApplicationQueriesSchemes": [
           "linkedin"
         ],
@@ -66,12 +69,15 @@
     },
     "plugins": [
       "expo-font",
+      "expo-splash-screen",
       [
         "expo-notifications",
         {
           "icon": "./assets/logo1.png",
           "color": "#581845",
-          "sounds": ["./assets/sounds/incoming.wav"],
+          "sounds": [
+            "./assets/sounds/incoming.wav"
+          ],
           "defaultChannel": "messages",
           "enableBackgroundRemoteNotifications": true
         }
@@ -89,7 +95,8 @@
           "cameraPermission": "Allow 34thstreet to access your camera for video calls.",
           "microphonePermission": "Allow 34thstreet to access your microphone for voice and video calls."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

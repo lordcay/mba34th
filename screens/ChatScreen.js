@@ -21,9 +21,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getConnectionStatus, getConnectionCount } from '../services/connection.service';
 import { playPing, showTopToast } from '../utils/notify';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import { API_BASE_URL as BASE_URL } from '../config';
 
 
-const BASE_URL = 'https://three4th-street-backend.onrender.com';
+// Using BASE_URL from config.js
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const ChatScreen = () => {
@@ -773,7 +774,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('http://192.168.100.28:4000/messages/conversations/list', {
+//       const res = await axios.get('http://192.168.14.134:4000/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 
 //       });
@@ -892,7 +893,7 @@ const styles = StyleSheet.create({
 
 //   const getPhotoUri = (photo) =>
 //     photo
-//       ? (photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`)
+//       ? (photo.startsWith('http') ? photo : `http://192.168.14.134:4000${photo}`)
 //       : 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
 
 //   const formatSchoolFromEmail = (email) => {
@@ -916,7 +917,7 @@ const styles = StyleSheet.create({
 //   );
 
 //   try {
-//     const res = await axios.get(`http://192.168.100.28:4000/accounts/${targetId}`, {
+//     const res = await axios.get(`http://192.168.14.134:4000/accounts/${targetId}`, {
 //       headers: { Authorization: `Bearer ${token}` },
 //     });
 
@@ -1105,7 +1106,7 @@ const styles = StyleSheet.create({
 
 //   const fetchConversations = useCallback(async () => {
 //     try {
-//       const res = await axios.get('http://192.168.100.28:4000/messages/conversations/list', {
+//       const res = await axios.get('http://192.168.14.134:4000/messages/conversations/list', {
 //         headers: { Authorization: `Bearer ${token}` }
 //       });
 //       // sort newest first (helps when socket updates arrive)
@@ -1214,7 +1215,7 @@ const styles = StyleSheet.create({
 //   const getPhotoUri = (photo) => {
 //     if (!photo)
 //       return 'https://images.unsplash.com/photo-1626695436755-3e288720849c?q=80&w=2342&auto=format&fit=crop';
-//     return photo.startsWith('http') ? photo : `http://192.168.100.28:4000${photo}`;
+//     return photo.startsWith('http') ? photo : `http://192.168.14.134:4000${photo}`;
 //   };
 
 //   const formatSchoolFromEmail = (email) => {

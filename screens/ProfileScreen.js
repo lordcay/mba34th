@@ -22,9 +22,21 @@ import { RefreshControl } from 'react-native';
 import { Linking } from 'react-native';
 import { refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { API_BASE_URL } from '../config';
+import PhotoViewer from '../components/PhotoViewer';
 
 
 
+
+// Timezone-safe DOB display — always shows the stored date regardless of timezone
+const formatDobDisplay = (dobStr) => {
+  if (!dobStr) return null;
+  const dateOnly = String(dobStr).split('T')[0];
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[m - 1]} ${d}, ${y}`;
+};
 
 const ProfileScreen = () => {
   const { user, logout, updateUser } = useContext(AuthContext);
@@ -35,6 +47,8 @@ const ProfileScreen = () => {
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
 
 
 
@@ -61,7 +75,7 @@ const ProfileScreen = () => {
       const userId = await AsyncStorage.getItem('userId');
 
       const res = await axios.put(
-        `http://192.168.100.28:4000/accounts/${userId}`,
+        `${API_BASE_URL}/accounts/${userId}`,
         { photos: reordered },
         {
           headers: {
@@ -110,6 +124,15 @@ const ProfileScreen = () => {
 
 
 
+  const photoUris = (user.photos || []).map((p) =>
+    p.startsWith('http') ? p : `${API_BASE_URL}${p}`
+  );
+
+  const openPhotoViewer = (index) => {
+    setViewerIndex(index);
+    setViewerVisible(true);
+  };
+
   return (
     <ScrollView style={styles.container} >
       <View style={[styles.topNav, { paddingTop: insets.top + 10 }]}>
@@ -125,19 +148,18 @@ const ProfileScreen = () => {
       </View>
       {/* Profile Picture Section */}
       <View style={styles.profileHeader}>
-        <Image
-          source={{
-            uri:
-              user.photos && user.photos.length > 0
-                ? user.photos[0].startsWith('http')
-                  ? user.photos[0]
-                  : `http://192.168.100.28:4000${user.photos[0]}`
-                : 'https://via.placeholder.com/150',
-          }}
-          style={styles.profilePic}
-          fadeDuration={300}
-
-        />
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => { if (photoUris.length > 0) openPhotoViewer(0); }}
+        >
+          <Image
+            source={{
+              uri: photoUris.length > 0 ? photoUris[0] : 'https://via.placeholder.com/150',
+            }}
+            style={styles.profilePic}
+            fadeDuration={300}
+          />
+        </TouchableOpacity>
         <Text style={styles.fullName}>
           {user.firstName} {user.lastName}
         </Text>
@@ -162,7 +184,8 @@ const ProfileScreen = () => {
 
             renderItem={({ item, index }) => (
               <TouchableOpacity
-                onPress={() => {
+                onPress={() => openPhotoViewer(index)}
+                onLongPress={() => {
                   if (index !== 0) {
                     setSelectedPhotoIndex(index);
                     setShowConfirmModal(true);
@@ -171,11 +194,7 @@ const ProfileScreen = () => {
                 style={{ alignItems: 'center', marginRight: 12 }}
               >
                 <Image
-                  source={{
-                    uri: item.startsWith('http')
-                      ? item
-                      : `http://192.168.100.28:4000${item}`,
-                  }}
+                  source={{ uri: photoUris[index] }}
                   style={[
                     styles.galleryImage,
                     index === 0 && styles.profileHighlight,
@@ -234,7 +253,7 @@ const ProfileScreen = () => {
         <InfoRow label="Email" value={user.email} />
         <InfoRow label="Phone Number" value={user.phone} />
         <InfoRow label="Gender" value={user.gender} />
-        <InfoRow label="Date of Birth" value={user.DOB?.slice(0, 10) || 'N/A'} />
+        <InfoRow label="Date of Birth" value={formatDobDisplay(user.DOB) || 'N/A'} />
         <InfoRow label="Languages Spoken" value={parseLanguages(user.languages)} />
         <InfoRow label="Origin" value={user.origin} />
 
@@ -359,6 +378,13 @@ const ProfileScreen = () => {
       <TouchableOpacity style={styles.logoutBtn} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
+
+      <PhotoViewer
+        visible={viewerVisible}
+        photos={photoUris}
+        initialIndex={viewerIndex}
+        onClose={() => setViewerVisible(false)}
+      />
     </ScrollView>
   );
 };

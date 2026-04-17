@@ -28,12 +28,13 @@ import { playPing } from '../utils/notify';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 // Backend URL for image paths
 const getImageUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('http')) return path;
-  return `https://three4th-street-backend.onrender.com${path.startsWith('/') ? '' : '/'}${path}`;
+  return `${API_BASE_URL}${path.startsWith('/') ? '' : '/'}${path}`;
 };
 
 const NotificationsScreen = () => {

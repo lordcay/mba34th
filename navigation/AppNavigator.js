@@ -2,7 +2,7 @@
 
 import React, { useContext } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import { AuthContext } from '../context/AuthContext';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -22,10 +22,11 @@ import GenderScreen from '../screens/GenderScreen';
 import LocationScreen from '../screens/LocationScreen';
 import TypeScreen from '../screens/TypeScreen';
 import VerifyOTPScreen from '../screens/VerifyOTPScreen';
+import SchoolNotListedScreen from '../screens/SchoolNotListedScreen';
+import AlumniScreen from '../screens/AlumniScreen';
 import Toast from 'react-native-toast-message';
 import ProfileScreen from '../screens/ProfileScreen';
 import ChatScreen from '../screens/ChatScreen';
-import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import UserProfileScreen from '../screens/UserProfileScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
@@ -46,9 +47,7 @@ import EventDetailScreen from '../screens/EventDetailScreen';
 import ServiceDetailScreen from '../screens/ServiceDetailScreen';
 
 
-
-
-const Stack = createNativeStackNavigator();
+const Stack = createStackNavigator();
 
 const AppNavigator = () => {
   const { user, isLoading, checkProfileCompletion } = useContext(AuthContext);
@@ -79,25 +78,7 @@ const AppNavigator = () => {
   checkProfileCompletion && !checkProfileCompletion(user) ? (
     <>
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      {/* ✅ add Home route so reset/navigation can work */}
-      <Stack.Screen name="Home" component={TabNavigator} />
-      <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
-      <Stack.Screen name="UserProfile" component={UserProfileScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="Search" component={SearchScreen} />
-      <Stack.Screen name="ConnectionRequests" component={ConnectionRequestsScreen} />
-      <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
-      <Stack.Screen name="ChatRoomsListScreen" component={ChatRoomsListScreen} />
-      <Stack.Screen name="ChatRoomScreen" component={ChatRoomScreen} />
-      <Stack.Screen name="PostDetail" component={PostDetailScreen} />
-      <Stack.Screen name="CreateEvent" component={CreateEventScreen} />
-      <Stack.Screen name="Events" component={EventsScreen} />
-      <Stack.Screen name="Services" component={ServicesScreen} />
-      <Stack.Screen name="CreateService" component={CreateServiceScreen} />
-      <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
-      <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-      <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+      <Stack.Screen name="SupportWeb" component={SupportWebScreen} />
     </>
   ) : (
     <>
@@ -119,7 +100,8 @@ const AppNavigator = () => {
       <Stack.Screen name="CreateService" component={CreateServiceScreen} />
       <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
       <Stack.Screen name="EventDetail" component={EventDetailScreen} />
-      <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+      <Stack.Screen name="SupportWeb" component={SupportWebScreen} />
+      <Stack.Screen name="Call" component={CallScreen} options={{ headerShown: false, gestureEnabled: false, cardStyleInterpolator: CardStyleInterpolators.forFadeFromCenter }} />
     </>
   )
 ) : (
@@ -140,6 +122,8 @@ const AppNavigator = () => {
             <Stack.Screen name="PhotoUploadScreen" component={PhotoUploadScreen} />
             <Stack.Screen name="PreFinal" component={PreFinalScreen} />
             <Stack.Screen name="VerifyOTPScreen" component={VerifyOTPScreen} />
+            <Stack.Screen name="SchoolNotListed" component={SchoolNotListedScreen} />
+            <Stack.Screen name="Alumni" component={AlumniScreen} />
             <Stack.Screen name="SupportWeb" component={SupportWebScreen} />
 
           </>

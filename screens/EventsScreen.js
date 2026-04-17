@@ -1,5 +1,4 @@
-// screens/EventsScreen.js
-import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useContext, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,16 +22,48 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { AuthContext } from '../context/AuthContext';
 import eventService from '../services/event.service';
 import { getCurrentLocation, calculateDistance, formatDistance, hasLocationPermission, geocodeAddress } from '../services/location.service';
+import RsvpVisibilityModal from '../components/RsvpVisibilityModal';
+import Slider from '@react-native-community/slider';
 import Colors from '../constants/Colors';
+import { API_BASE_URL as IMG_BASE } from '../config';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 32;
 
 const ACCENT = Colors.primary || '#581845';
+const ACCENT_DARK = Colors.primaryDark || '#3D1030';
+const ACCENT_LIGHT = Colors.primarySoft || '#F5EDF8';
+// Using IMG_BASE from config.js
+
+// Resolve photo URL from photos array
+const toPhotoUrl = (photos) => {
+  if (!photos || !Array.isArray(photos) || photos.length === 0) return null;
+  const p = photos[0];
+  if (!p) return null;
+  if (p.startsWith('http')) return p;
+  return `${IMG_BASE}${p.startsWith('/') ? '' : '/'}${p}`;
+};
+
+// Haversine distance calculation (same as ServicesScreen)
+const calcDistance = (lat1, lon1, lat2, lon2) => {
+  if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 
 // Tab options for filtering events
 const TABS = [
   { key: 'upcoming', label: 'Upcoming' },
+  { key: 'past', label: 'Past' },
   { key: 'attending', label: 'Attending' },
   { key: 'mine', label: 'My Events' },
 ];
@@ -41,6 +72,7 @@ const TABS = [
 const EventCard = ({ event, onPress, onRsvp }) => {
   const eventDate = new Date(event.date || event.startDate);
   const isValidDate = !isNaN(eventDate.getTime());
+  const isPast = isValidDate && eventDate < new Date();
   
   const formattedDate = isValidDate 
     ? eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
@@ -54,9 +86,8 @@ const EventCard = ({ event, onPress, onRsvp }) => {
   const maxAttendees = event.maxAttendees || event.expectedAttendees || 50;
   const slotsLeft = Math.max(0, maxAttendees - attendeeCount);
   const isAttending = event.isAttending || event.rsvpStatus === 'going';
-  
-  // Calculate mock distance (in real app, use actual coordinates)
-  const distance = event.distance || (Math.random() * 10 + 0.5).toFixed(1);
+  const commentCount = event.commentCount || 0;
+  const averageRating = event.averageRating || 0;
 
   return (
     <TouchableOpacity 
@@ -87,6 +118,19 @@ const EventCard = ({ event, onPress, onRsvp }) => {
         )}
       </LinearGradient>
 
+      {/* Event Photo / Flyer */}
+      {(() => {
+        const photoUri = event.photos?.[0] || event.image || event.imageUrl;
+        if (!photoUri || typeof photoUri !== 'string' || !photoUri.startsWith('http')) return null;
+        return (
+          <Image
+            source={{ uri: photoUri }}
+            style={styles.cardPhoto}
+            resizeMode="cover"
+          />
+        );
+      })()}
+
       {/* Card Content */}
       <View style={styles.cardBody}>
         {/* Title */}
@@ -95,31 +139,31 @@ const EventCard = ({ event, onPress, onRsvp }) => {
         </Text>
 
         {/* Host/Organizer Row */}
-        {(event.organizer || event.createdBy) && (
-          <View style={styles.hostRow}>
-            {(event.organizer || event.createdBy)?.profilePicture || 
-             (event.organizer || event.createdBy)?.profileImage || 
-             (event.organizer || event.createdBy)?.avatar ? (
-              <Image 
-                source={{ uri: (event.organizer || event.createdBy).profilePicture || 
-                          (event.organizer || event.createdBy).profileImage || 
-                          (event.organizer || event.createdBy).avatar }}
-                style={styles.hostAvatar}
-              />
-            ) : (
-              <View style={[styles.hostAvatar, styles.hostAvatarPlaceholder]}>
-                <Ionicons name="person" size={10} color={ACCENT} />
-              </View>
-            )}
-            <Text style={styles.hostText}>
-              Hosted by{' '}
-              <Text style={styles.hostName}>
-                {(event.organizer || event.createdBy)?.firstName || 'Unknown'}{' '}
-                {(event.organizer || event.createdBy)?.lastName || ''}
+        {(event.organizer || event.createdBy) && (() => {
+          const host = event.organizer || event.createdBy;
+          const hostPhoto = toPhotoUrl(host?.photos);
+          return (
+            <View style={styles.hostRow}>
+              {hostPhoto ? (
+                <Image 
+                  source={{ uri: hostPhoto }}
+                  style={styles.hostAvatar}
+                />
+              ) : (
+                <View style={[styles.hostAvatar, styles.hostAvatarPlaceholder]}>
+                  <Ionicons name="person" size={10} color={ACCENT} />
+                </View>
+              )}
+              <Text style={styles.hostText}>
+                Hosted by{' '}
+                <Text style={styles.hostName}>
+                  {host?.firstName || 'Unknown'}{' '}
+                  {host?.lastName || ''}
+                </Text>
               </Text>
-            </Text>
-          </View>
-        )}
+            </View>
+          );
+        })()}
 
         {/* Description */}
         {event.description && (
@@ -137,12 +181,14 @@ const EventCard = ({ event, onPress, onRsvp }) => {
                 {event.venueName || event.location || event.fullAddress}
               </Text>
             </View>
-            <View style={styles.distanceBadge}>
-              <Ionicons name="navigate" size={12} color="#666" />
-              <Text style={styles.distanceText}>
-                {event.distanceDisplay ? `${event.distanceDisplay} away` : 'Distance unavailable'}
-              </Text>
-            </View>
+            {event.distanceDisplay ? (
+              <View style={styles.distanceBadge}>
+                <Ionicons name="navigate" size={12} color={ACCENT} />
+                <Text style={styles.distanceText}>
+                  {event.distanceDisplay} away
+                </Text>
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -156,37 +202,64 @@ const EventCard = ({ event, onPress, onRsvp }) => {
                 </View>
               ))}
             </View>
-            <Text style={styles.attendeeCountText}>{attendeeCount} attending</Text>
+            <Text style={styles.attendeeCountText}>{attendeeCount} attended{isPast ? '' : 'ing'}</Text>
           </View>
 
-          <View style={styles.slotsContainer}>
-            <View style={[styles.slotsBadge, slotsLeft <= 5 && styles.slotsBadgeLow]}>
-              <Ionicons 
-                name={slotsLeft <= 5 ? "warning" : "ticket"} 
-                size={14} 
-                color={slotsLeft <= 5 ? "#E74C3C" : ACCENT} 
-              />
-              <Text style={[styles.slotsText, slotsLeft <= 5 && styles.slotsTextLow]}>
-                {slotsLeft} slots left
-              </Text>
+          {isPast ? (
+            <View style={styles.reviewSummary}>
+              {averageRating > 0 && (
+                <View style={styles.ratingBadge}>
+                  <Ionicons name="star" size={13} color="#F5A623" />
+                  <Text style={styles.ratingBadgeText}>{averageRating}</Text>
+                </View>
+              )}
+              {commentCount > 0 && (
+                <View style={styles.commentCountBadge}>
+                  <Ionicons name="chatbubble-outline" size={13} color={ACCENT} />
+                  <Text style={styles.commentCountText}>{commentCount}</Text>
+                </View>
+              )}
             </View>
-          </View>
+          ) : (
+            <View style={styles.slotsContainer}>
+              <View style={[styles.slotsBadge, slotsLeft <= 5 && styles.slotsBadgeLow]}>
+                <Ionicons 
+                  name={slotsLeft <= 5 ? "warning" : "ticket"} 
+                  size={14} 
+                  color={slotsLeft <= 5 ? "#E74C3C" : ACCENT} 
+                />
+                <Text style={[styles.slotsText, slotsLeft <= 5 && styles.slotsTextLow]}>
+                  {slotsLeft} slots left
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
-        {/* RSVP Button */}
-        <TouchableOpacity
-          style={[styles.rsvpFullButton, isAttending && styles.rsvpFullButtonActive]}
-          onPress={() => onRsvp(event)}
-        >
-          <Ionicons 
-            name={isAttending ? "checkmark-circle" : "add-circle-outline"} 
-            size={20} 
-            color={isAttending ? '#fff' : ACCENT} 
-          />
-          <Text style={[styles.rsvpFullButtonText, isAttending && styles.rsvpFullButtonTextActive]}>
-            {isAttending ? 'Going' : 'RSVP to Event'}
-          </Text>
-        </TouchableOpacity>
+        {/* RSVP Button / Past Event Badge */}
+        {isPast ? (
+          <View style={styles.pastEventRow}>
+            <View style={styles.pastBadge}>
+              <Ionicons name="checkmark-done" size={16} color={ACCENT} />
+              <Text style={styles.pastBadgeText}>Past Event</Text>
+            </View>
+            <Text style={styles.viewReviewsText}>View Reviews →</Text>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={[styles.rsvpFullButton, isAttending && styles.rsvpFullButtonActive]}
+            onPress={() => onRsvp(event)}
+          >
+            <Ionicons 
+              name={isAttending ? "checkmark-circle" : "add-circle-outline"} 
+              size={20} 
+              color={isAttending ? '#fff' : ACCENT} 
+            />
+            <Text style={[styles.rsvpFullButtonText, isAttending && styles.rsvpFullButtonTextActive]}>
+              {isAttending ? 'Going' : 'RSVP for this event'}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -199,6 +272,11 @@ const EmptyState = ({ activeTab, onCreatePress }) => {
       icon: 'calendar-outline',
       title: 'No upcoming events',
       subtitle: 'Be the first to create an event for the community!',
+    },
+    past: {
+      icon: 'time-outline',
+      title: 'No past events yet',
+      subtitle: 'Past events will appear here so you can read reviews and build trust.',
     },
     attending: {
       icon: 'ticket-outline',
@@ -255,6 +333,15 @@ const EventsScreen = () => {
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [locationSharingEnabled, setLocationSharingEnabled] = useState(true);
 
+  // Distance filter state
+  const [maxDistanceKm, setMaxDistanceKm] = useState(0); // 0 = Anywhere
+  const [showDistanceFilter, setShowDistanceFilter] = useState(false);
+
+  // RSVP visibility modal state
+  const [rsvpModalVisible, setRsvpModalVisible] = useState(false);
+  const [rsvpModalEvent, setRsvpModalEvent] = useState(null);
+  const [rsvpModalLoading, setRsvpModalLoading] = useState(false);
+
   const flatListRef = useRef(null);
   const tabIndicatorAnim = useRef(new Animated.Value(0)).current;
 
@@ -278,52 +365,34 @@ const EventsScreen = () => {
     }
   };
 
-  // Calculate distance for an event (with geocoding if needed)
-  const calculateEventDistance = async (event) => {
-    if (!userLocation || !locationEnabled) return null;
+  // Calculate distance for an event using stored GeoJSON coordinates
+  const calculateEventDistance = (event) => {
+    if (!userLocation) return null;
 
-    let eventLat = event.latitude;
-    let eventLon = event.longitude;
-
-    // If event doesn't have coordinates, try to geocode the address
-    if (!eventLat || !eventLon) {
-      const address = event.fullAddress || event.location || event.venueName;
-      if (address) {
-        try {
-          const coords = await geocodeAddress(address);
-          if (coords) {
-            eventLat = coords.latitude;
-            eventLon = coords.longitude;
-          }
-        } catch (error) {
-          console.log('Error geocoding event address:', error);
-        }
-      }
+    // Use GeoJSON coordinates from DB: coordinates.coordinates = [lng, lat]
+    const coords = event.coordinates?.coordinates;
+    if (coords && coords.length === 2 && !(coords[0] === 0 && coords[1] === 0)) {
+      return calcDistance(userLocation.latitude, userLocation.longitude, coords[1], coords[0]);
     }
 
-    if (!eventLat || !eventLon) return null;
+    // Fallback: event-level lat/lng
+    if (event.latitude && event.longitude) {
+      return calcDistance(userLocation.latitude, userLocation.longitude, event.latitude, event.longitude);
+    }
 
-    return calculateDistance(
-      userLocation.latitude,
-      userLocation.longitude,
-      eventLat,
-      eventLon
-    );
+    return null;
   };
 
-  // Add distance to events (async with geocoding)
-  const processEventsWithDistance = async (eventsList) => {
-    const eventsWithDistance = await Promise.all(
-      eventsList.map(async (event) => {
-        const distance = await calculateEventDistance(event);
-        return {
-          ...event,
-          distance,
-          distanceDisplay: formatDistance(distance)
-        };
-      })
-    );
-    return eventsWithDistance;
+  // Add distance to events
+  const processEventsWithDistance = (eventsList) => {
+    return eventsList.map((event) => {
+      const distance = calculateEventDistance(event);
+      return {
+        ...event,
+        distance,
+        distanceDisplay: distance !== null ? formatDistance(distance) : null,
+      };
+    });
   };
 
   // Fetch events based on active tab
@@ -345,12 +414,15 @@ const EventsScreen = () => {
         case 'mine':
           result = await eventService.getMyEvents(pageNum, 15);
           break;
+        case 'past':
+          result = await eventService.getPastEvents(pageNum, 15);
+          break;
         default:
           result = await eventService.getUpcomingEvents(pageNum, 15);
       }
 
       if (result.success && result.data) {
-        const eventsWithDistance = await processEventsWithDistance(result.data);
+        const eventsWithDistance = processEventsWithDistance(result.data);
         if (pageNum === 1) {
           setEvents(eventsWithDistance);
         } else {
@@ -485,18 +557,36 @@ const EventsScreen = () => {
           ]
         );
       } else {
-        const result = await eventService.rsvpEvent(event._id || event.id, 'going');
-        if (result.success) {
-          setEvents(prev => prev.map(e => 
-            (e._id || e.id) === (event._id || event.id)
-              ? { ...e, isAttending: true, rsvpStatus: 'going', attendeeCount: (e.attendeeCount || 0) + 1 }
-              : e
-          ));
-        }
+        // Show visibility modal before RSVP
+        setRsvpModalEvent(event);
+        setRsvpModalVisible(true);
       }
     } catch (error) {
       console.log('RSVP error:', error);
       Alert.alert('Error', 'Failed to update RSVP. Please try again.');
+    }
+  };
+
+  // Confirm RSVP with visibility
+  const handleRsvpConfirm = async (visibility) => {
+    if (!rsvpModalEvent) return;
+    setRsvpModalLoading(true);
+    try {
+      const result = await eventService.rsvpEvent(rsvpModalEvent._id || rsvpModalEvent.id, 'going', visibility);
+      if (result.success) {
+        setEvents(prev => prev.map(e => 
+          (e._id || e.id) === (rsvpModalEvent._id || rsvpModalEvent.id)
+            ? { ...e, isAttending: true, rsvpStatus: 'going', attendeeCount: (e.attendeeCount || 0) + 1 }
+            : e
+        ));
+      }
+    } catch (error) {
+      console.log('RSVP error:', error);
+      Alert.alert('Error', 'Failed to RSVP. Please try again.');
+    } finally {
+      setRsvpModalLoading(false);
+      setRsvpModalVisible(false);
+      setRsvpModalEvent(null);
     }
   };
 
@@ -564,8 +654,8 @@ const EventsScreen = () => {
               {
                 transform: [{
                   translateX: tabIndicatorAnim.interpolate({
-                    inputRange: [0, 1, 2],
-                    outputRange: [0, (width - 32) / 3, ((width - 32) / 3) * 2],
+                    inputRange: [0, 1, 2, 3],
+                    outputRange: [0, (width - 32) / 4, ((width - 32) / 4) * 2, ((width - 32) / 4) * 3],
                   }),
                 }],
               },
@@ -573,11 +663,73 @@ const EventsScreen = () => {
           />
         </View>
       </View>
+
+      {/* Distance Filter Toggle */}
+      <View style={styles.filterRow}>
+        <TouchableOpacity
+          style={styles.distanceFilterBtn}
+          onPress={() => setShowDistanceFilter(!showDistanceFilter)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="options-outline" size={16} color={ACCENT_DARK} />
+          <Text style={styles.distanceFilterBtnText}>
+            {maxDistanceKm > 0 ? `Within ${maxDistanceKm} km` : 'Distance'}
+          </Text>
+          {maxDistanceKm > 0 && <View style={styles.filterActiveDot} />}
+        </TouchableOpacity>
+        {maxDistanceKm > 0 && (
+          <TouchableOpacity onPress={() => setMaxDistanceKm(0)} style={styles.filterClearBtn}>
+            <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Distance Slider (Tinder-style) */}
+      {showDistanceFilter && (
+        <View style={styles.distanceSliderContainer}>
+          <View style={styles.distanceSliderHeader}>
+            <Text style={styles.distanceSliderTitle}>Distance</Text>
+            <View style={styles.distanceSliderBadge}>
+              <Text style={styles.distanceSliderBadgeText}>
+                {maxDistanceKm === 0 ? 'Anywhere' : `${maxDistanceKm} km`}
+              </Text>
+            </View>
+          </View>
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={200}
+            step={5}
+            value={maxDistanceKm}
+            onValueChange={setMaxDistanceKm}
+            minimumTrackTintColor={ACCENT}
+            maximumTrackTintColor="#E5E7EB"
+            thumbTintColor={ACCENT}
+          />
+          <View style={styles.sliderLabels}>
+            <Text style={styles.sliderLabel}>Anywhere</Text>
+            <Text style={styles.sliderLabel}>200 km</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 
+  // Client-side distance filtering (same algorithm as ServicesScreen)
+  const filteredEvents = useMemo(() => {
+    const source = isSearchActive ? searchResults : events;
+    if (!maxDistanceKm || !userLocation) return source;
+
+    return source.filter((event) => {
+      const coords = event.coordinates?.coordinates;
+      if (!coords || (coords[0] === 0 && coords[1] === 0)) return false;
+      const dist = calcDistance(userLocation.latitude, userLocation.longitude, coords[1], coords[0]);
+      return dist !== null && dist <= maxDistanceKm;
+    });
+  }, [events, searchResults, isSearchActive, maxDistanceKm, userLocation]);
+
   // Display data
-  const displayData = isSearchActive ? searchResults : events;
+  const displayData = filteredEvents;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -618,10 +770,26 @@ const EventsScreen = () => {
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           !loading && (
-            <EmptyState 
-              activeTab={activeTab} 
-              onCreatePress={goToCreateEvent}
-            />
+            maxDistanceKm > 0 ? (
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconWrapper}>
+                  <Ionicons name="location-outline" size={48} color={ACCENT} />
+                </View>
+                <Text style={styles.emptyTitle}>No events nearby</Text>
+                <Text style={styles.emptySubtitle}>
+                  No events found within {maxDistanceKm} km. Try increasing the distance.
+                </Text>
+                <TouchableOpacity style={styles.emptyButton} onPress={() => setMaxDistanceKm(0)}>
+                  <Ionicons name="refresh" size={20} color="#fff" />
+                  <Text style={styles.emptyButtonText}>Show All Events</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <EmptyState 
+                activeTab={activeTab} 
+                onCreatePress={goToCreateEvent}
+              />
+            )
           )
         }
         ListFooterComponent={
@@ -655,6 +823,18 @@ const EventsScreen = () => {
           <Text style={styles.loadingText}>Loading events...</Text>
         </View>
       )}
+
+      {/* RSVP Visibility Modal */}
+      <RsvpVisibilityModal
+        visible={rsvpModalVisible}
+        onClose={() => {
+          setRsvpModalVisible(false);
+          setRsvpModalEvent(null);
+        }}
+        onConfirm={handleRsvpConfirm}
+        eventTitle={rsvpModalEvent?.title || rsvpModalEvent?.name}
+        loading={rsvpModalLoading}
+      />
     </SafeAreaView>
   );
 };
@@ -748,7 +928,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 4,
     left: 4,
-    width: (width - 32 - 8) / 3,
+    width: (width - 32 - 8) / 4,
     height: '100%',
     backgroundColor: '#fff',
     borderRadius: 10,
@@ -781,6 +961,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
+  },
+  cardPhoto: {
+    width: '100%',
+    height: 180,
   },
   headerDateContainer: {
     flexDirection: 'row',
@@ -882,16 +1066,16 @@ const styles = StyleSheet.create({
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
+    backgroundColor: ACCENT_LIGHT,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
   distanceText: {
     fontSize: 12,
-    color: '#666',
+    color: ACCENT_DARK,
     marginLeft: 4,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   cardFooter: {
     flexDirection: 'row',
@@ -1033,6 +1217,144 @@ const styles = StyleSheet.create({
   loadingMore: {
     paddingVertical: 20,
     alignItems: 'center',
+  },
+
+  // Distance Filter
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    gap: 8,
+  },
+  distanceFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: ACCENT_LIGHT,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  distanceFilterBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: ACCENT_DARK,
+  },
+  filterActiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: ACCENT,
+    marginLeft: 2,
+  },
+  filterClearBtn: {
+    padding: 4,
+  },
+  distanceSliderContainer: {
+    marginHorizontal: 16,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  distanceSliderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  distanceSliderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  distanceSliderBadge: {
+    backgroundColor: ACCENT_LIGHT,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  distanceSliderBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: ACCENT,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  sliderLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: -4,
+  },
+  sliderLabel: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  pastEventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  pastBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 4,
+  },
+  pastBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  viewReviewsText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: ACCENT,
+  },
+  reviewSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  ratingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  ratingBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  commentCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ACCENT_LIGHT,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    gap: 4,
+  },
+  commentCountText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: ACCENT,
   },
 });
 

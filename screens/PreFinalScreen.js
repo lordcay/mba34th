@@ -11,6 +11,7 @@ import { AuthContext } from '../context/AuthContext';
 import { getRegistrationProgress } from '../registrationUtils';
 // import CheckBox from '@react-native-community/checkbox'; // run: expo install @react-native-community/checkbox
 import Checkbox from 'expo-checkbox';
+import { API_BASE_URL } from '../config';
 
 const PreFinalScreen = () => {
   const navigation = useNavigation();
@@ -95,7 +96,7 @@ const PreFinalScreen = () => {
     };
 
     const res = await axios.post(
-      'http://192.168.100.28:4000/accounts/register',
+      API_BASE_URL + '/accounts/register',
       payload
     );
 
@@ -147,7 +148,7 @@ const PreFinalScreen = () => {
 //         bio: userData.bio || '',
 //         interests: userData.interests || [],
 //       };
-//       const res = await axios.post('http://192.168.100.28:4000/accounts/register', payload);
+//       const res = await axios.post('http://192.168.14.134:4000/accounts/register', payload);
 //       if (res.data.otpSent === false) {
 //   alert("Account created ✅. OTP email may be delayed. Please use 'Resend OTP' on the next screen.");
 // }

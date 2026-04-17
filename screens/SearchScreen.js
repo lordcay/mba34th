@@ -33,6 +33,7 @@ const CARD_WIDTH = SCREEN_WIDTH - CARD_MARGIN_H * 2;
 const IMAGE_HEIGHT = height * 0.35;
 
 const FallbackImage = require('../assets/fff.jpg');
+import { API_BASE_URL } from '../config';
 
 // Filter categories - like LinkedIn's People, Posts, Jobs, etc.
 const FILTER_CATEGORIES = [
@@ -423,7 +424,7 @@ const SearchScreen = ({ route }) => {
   // Render user result card (compact)
   const renderUserResult = ({ item: u }) => {
     const photoUri = u.photos?.[0]
-      ? (u.photos[0].startsWith('http') ? u.photos[0] : `http://192.168.100.28:4000${u.photos[0]}`)
+      ? (u.photos[0].startsWith('http') ? u.photos[0] : `${API_BASE_URL}${u.photos[0]}`)
       : null;
 
     const schoolName = getSchoolName(u.email);
@@ -671,7 +672,7 @@ const SearchScreen = ({ route }) => {
               <Image
                 source={
                   disconnectTarget.photos?.[0]
-                    ? { uri: disconnectTarget.photos[0].startsWith('http') ? disconnectTarget.photos[0] : `http://192.168.100.28:4000${disconnectTarget.photos[0]}` }
+                    ? { uri: disconnectTarget.photos[0].startsWith('http') ? disconnectTarget.photos[0] : `${API_BASE_URL}${disconnectTarget.photos[0]}` }
                     : FallbackImage
                 }
                 style={styles.modalAvatar}

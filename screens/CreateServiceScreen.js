@@ -1,4 +1,4 @@
-import React, { useState, useContext, useRef, useReducer, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useContext, useRef, useReducer, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,45 +11,40 @@ import {
   Keyboard,
   Alert,
   Platform,
-  Image,
+  Modal,
+  FlatList,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import serviceService from '../services/service.service';
+import { getCurrentLocation } from '../services/location.service';
 import Colors from '../constants/Colors';
 
-const FallbackImage = require('../assets/icon.png');
-
-const ACCENT = Colors.primary || '#581845';
+const ACCENT = Colors.primary;
+const ACCENT_DARK = Colors.primaryDark;
+const ACCENT_LIGHT = Colors.primarySoft;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // Service categories for dropdown
 const SERVICE_CATEGORIES = [
-  { value: 'consulting', label: 'Consulting' },
-  { value: 'tutoring', label: 'Tutoring' },
-  { value: 'design', label: 'Design' },
-  { value: 'tech', label: 'Tech & IT' },
-  { value: 'fitness', label: 'Fitness' },
-  { value: 'creative', label: 'Creative' },
-  { value: 'business', label: 'Business' },
-  { value: 'trade', label: 'Trade' },
-  { value: 'event', label: 'Event Services' },
-];
-
-// US States for location
-const US_STATES = [
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-  'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-  'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-  'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-  'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY',
+  { value: 'consulting', label: 'Consulting', icon: 'people' },
+  { value: 'tutoring', label: 'Tutoring', icon: 'school' },
+  { value: 'design', label: 'Design', icon: 'color-palette' },
+  { value: 'tech', label: 'Tech & IT', icon: 'code-slash' },
+  { value: 'fitness', label: 'Fitness', icon: 'fitness' },
+  { value: 'creative', label: 'Creative', icon: 'brush' },
+  { value: 'business', label: 'Business', icon: 'briefcase' },
+  { value: 'trade', label: 'Trade', icon: 'construct' },
+  { value: 'event', label: 'Event Services', icon: 'calendar' },
 ];
 
 // ==================== FORM VALIDATION HOOK ====================
 const useFormValidation = () => {
-  const validateField = useCallback((name, value, allValues = {}) => {
+  const validateField = useCallback((name, value) => {
     const trimmed = value?.trim?.() || '';
     switch (name) {
       case 'title':
@@ -58,14 +53,14 @@ const useFormValidation = () => {
         return !trimmed ? 'Service description is required' : '';
       case 'category':
         return !value ? 'Category is required' : '';
-      case 'city':
-        return !trimmed ? 'City is required' : '';
-      case 'state':
-        return !value ? 'State is required' : '';
-      case 'pricing':
-        const hasHourly = allValues.hourlyRate && parseFloat(allValues.hourlyRate) > 0;
-        const hasBase = allValues.basePrice && parseFloat(allValues.basePrice) > 0;
-        return !hasHourly && !hasBase ? 'Please enter hourly rate or base price' : '';
+      case 'serviceLocation':
+        return !trimmed ? 'Service location is required' : '';
+      case 'fullAddress':
+        return !trimmed ? 'Full address is required' : '';
+      case 'contactEmail':
+        if (!trimmed) return 'Contact email is required';
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return 'Please enter a valid email';
+        return '';
       default:
         return '';
     }
@@ -104,19 +99,24 @@ const createInitialState = (editService) => ({
     title: editService?.title || '',
     description: editService?.description || '',
     category: editService?.category || '',
-    subcategory: editService?.subcategory || '',
-    hourlyRate: editService?.hourlyRate?.toString() || '',
-    basePrice: editService?.basePrice?.toString() || '',
-    city: editService?.city || '',
-    state: editService?.state || '',
-    experience: editService?.experience || '',
-    skills: editService?.skills || [],
+    pricing: editService?.pricing || '',
+    serviceLocation: editService?.serviceLocation || '',
+    fullAddress: editService?.fullAddress || '',
+    contactEmail: editService?.contactEmail || '',
+    contactPhone: editService?.contactPhone || '',
+    website: editService?.website || '',
+    instagram: editService?.instagram || '',
+    facebook: editService?.facebook || '',
+    twitter: editService?.twitter || '',
+    linkedin: editService?.linkedin || '',
   },
   errors: {},
   loading: false,
 });
 
 // ==================== MEMOIZED COMPONENTS ====================
+
+// Material-style Input with floating feel
 const InputField = React.memo(({
   label,
   icon,
@@ -126,129 +126,167 @@ const InputField = React.memo(({
   helperText,
   ...props
 }) => (
-  <View style={styles.inputContainer}>
-    <Text style={styles.inputLabel}>
-      {icon && <Ionicons name={icon} size={14} color={Colors.textSecondary} />}
-      {icon && ' '}{label} {required && <Text style={styles.required}>*</Text>}
+  <View style={styles.fieldGroup}>
+    <Text style={styles.fieldLabel}>
+      {label} {required && <Text style={styles.required}>*</Text>}
     </Text>
-    <View style={[styles.inputWrapper, error && styles.inputError, multiline && styles.multilineWrapper]}>
+    <View style={[
+      styles.fieldInputWrap,
+      multiline && styles.fieldMultilineWrap,
+      error && styles.fieldInputError,
+      props.value?.length > 0 && styles.fieldInputFilled,
+    ]}>
+      {icon && (
+        <View style={styles.fieldIconWrap}>
+          <Ionicons name={icon} size={18} color={error ? Colors.error : (props.value?.length > 0 ? ACCENT : Colors.textMuted)} />
+        </View>
+      )}
       <TextInput
-        style={[styles.input, multiline && styles.multilineInput]}
-        placeholderTextColor={Colors.textMuted}
+        style={[
+          styles.fieldInput,
+          icon && styles.fieldInputWithIcon,
+          multiline && styles.fieldMultilineInput,
+        ]}
+        placeholderTextColor="#B0B0B0"
         multiline={multiline}
         textAlignVertical={multiline ? 'top' : 'center'}
         {...props}
       />
     </View>
-    {helperText && <Text style={styles.helperText}>{helperText}</Text>}
-    {error && <Text style={styles.errorText}>{error}</Text>}
+    {helperText && !error && (
+      <View style={styles.helperRow}>
+        <Ionicons name="information-circle-outline" size={13} color={Colors.textMuted} />
+        <Text style={styles.helperText}>{helperText}</Text>
+      </View>
+    )}
+    {error && (
+      <View style={styles.errorRow}>
+        <Ionicons name="alert-circle" size={13} color={Colors.error} />
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    )}
   </View>
 ));
 InputField.displayName = 'InputField';
 
+// Modal-based Select — no overlap issues
 const SelectField = React.memo(({ label, options, value, onValueChange, error, required = false }) => {
-  const [showDropdown, setShowDropdown] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const selectedOption = options.find((opt) => opt.value === value);
 
   return (
-    <View style={styles.selectContainer}>
-      <Text style={styles.inputLabel}>
+    <View style={styles.fieldGroup}>
+      <Text style={styles.fieldLabel}>
         {label} {required && <Text style={styles.required}>*</Text>}
       </Text>
       <TouchableOpacity
-        style={[styles.selectField, error && styles.inputError]}
-        onPress={() => setShowDropdown(!showDropdown)}
+        style={[
+          styles.selectTrigger,
+          error && styles.fieldInputError,
+          value && styles.fieldInputFilled,
+        ]}
+        onPress={() => setVisible(true)}
+        activeOpacity={0.7}
       >
-        <Text style={[styles.selectText, !value && styles.selectPlaceholder]}>
-          {value ? options.find((opt) => opt.value === value)?.label : `Select ${label}...`}
+        {selectedOption?.icon && (
+          <View style={styles.fieldIconWrap}>
+            <Ionicons name={selectedOption.icon} size={18} color={ACCENT} />
+          </View>
+        )}
+        <Text style={[styles.selectTriggerText, !value && styles.selectPlaceholder]}>
+          {selectedOption ? selectedOption.label : `Select ${label.toLowerCase()}...`}
         </Text>
-        <Ionicons
-          name={showDropdown ? 'chevron-up' : 'chevron-down'}
-          size={20}
-          color={Colors.textSecondary}
-        />
+        <View style={styles.selectChevronWrap}>
+          <Ionicons name="chevron-expand" size={18} color={Colors.textSecondary} />
+        </View>
       </TouchableOpacity>
 
-      {showDropdown && (
-        <View style={styles.dropdown}>
-          {options.map((option) => (
-            <TouchableOpacity
-              key={option.value}
-              style={[styles.dropdownItem, value === option.value && styles.dropdownItemActive]}
-              onPress={() => {
-                onValueChange(option.value);
-                setShowDropdown(false);
-              }}
-            >
-              <Text
-                style={[
-                  styles.dropdownItemText,
-                  value === option.value && styles.dropdownItemTextActive,
-                ]}
-              >
-                {option.label}
-              </Text>
-              {value === option.value && <Ionicons name="checkmark" size={20} color={ACCENT} />}
-            </TouchableOpacity>
-          ))}
+      {error && (
+        <View style={styles.errorRow}>
+          <Ionicons name="alert-circle" size={13} color={Colors.error} />
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
-      {error && <Text style={styles.errorText}>{error}</Text>}
+      {/* Bottom Sheet Modal */}
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setVisible(false)}
+        >
+          <View style={styles.modalSheet}>
+            {/* Handle Bar */}
+            <View style={styles.modalHandle} />
+
+            <Text style={styles.modalTitle}>Select {label}</Text>
+
+            <FlatList
+              data={options}
+              keyExtractor={(item) => item.value}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.modalOption,
+                    value === item.value && styles.modalOptionActive,
+                  ]}
+                  onPress={() => {
+                    onValueChange(item.value);
+                    setVisible(false);
+                  }}
+                  activeOpacity={0.6}
+                >
+                  {item.icon && (
+                    <View style={[
+                      styles.modalOptionIcon,
+                      value === item.value && styles.modalOptionIconActive,
+                    ]}>
+                      <Ionicons
+                        name={item.icon}
+                        size={20}
+                        color={value === item.value ? '#fff' : ACCENT}
+                      />
+                    </View>
+                  )}
+                  <Text style={[
+                    styles.modalOptionText,
+                    value === item.value && styles.modalOptionTextActive,
+                  ]}>
+                    {item.label}
+                  </Text>
+                  {value === item.value && (
+                    <Ionicons name="checkmark-circle" size={22} color={ACCENT} />
+                  )}
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 });
 SelectField.displayName = 'SelectField';
 
-const SkillsInput = React.memo(({ skills, onChange }) => {
-  const [newSkill, setNewSkill] = useState('');
-
-  const handleAddSkill = useCallback(() => {
-    if (newSkill.trim() && skills.length < 10) {
-      onChange([...skills, newSkill.trim()]);
-      setNewSkill('');
-    }
-  }, [newSkill, skills, onChange]);
-
-  const handleRemoveSkill = useCallback((index) => {
-    onChange(skills.filter((_, i) => i !== index));
-  }, [skills, onChange]);
-
-  return (
-    <View style={styles.skillsContainer}>
-      <Text style={styles.inputLabel}>Skills & Expertise</Text>
-      <View style={styles.skillsInputRow}>
-        <TextInput
-          style={styles.skillsInput}
-          placeholder="Add a skill..."
-          placeholderTextColor={Colors.textMuted}
-          value={newSkill}
-          onChangeText={setNewSkill}
-        />
-        <TouchableOpacity
-          style={styles.skillsAddBtn}
-          onPress={handleAddSkill}
-          disabled={!newSkill.trim()}
-        >
-          <Ionicons name="add" size={20} color={newSkill.trim() ? ACCENT : Colors.textMuted} />
-        </TouchableOpacity>
+// Section Card wrapper for visual grouping
+const SectionCard = React.memo(({ title, icon, subtitle, children }) => (
+  <View style={styles.sectionCard}>
+    <View style={styles.sectionCardHeader}>
+      <View style={styles.sectionIconWrap}>
+        <Ionicons name={icon} size={18} color={ACCENT} />
       </View>
-
-      {skills.length > 0 && (
-        <View style={styles.skillsList}>
-          {skills.map((skill, index) => (
-            <View key={index} style={styles.skillBadge}>
-              <Text style={styles.skillText}>{skill}</Text>
-              <TouchableOpacity onPress={() => handleRemoveSkill(index)}>
-                <Ionicons name="close" size={16} color={ACCENT} />
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      )}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionCardTitle}>{title}</Text>
+        {subtitle && <Text style={styles.sectionCardSubtitle}>{subtitle}</Text>}
+      </View>
     </View>
-  );
-});
-SkillsInput.displayName = 'SkillsInput';
+    <View style={styles.sectionCardBody}>
+      {children}
+    </View>
+  </View>
+));
 
 // ==================== MAIN COMPONENT ====================
 const CreateServiceScreen = ({ route }) => {
@@ -258,6 +296,19 @@ const CreateServiceScreen = ({ route }) => {
 
   const editService = route?.params?.service;
   const isEditMode = !!editService;
+  const [serviceLimitReached, setServiceLimitReached] = useState(false);
+
+  // Check service limit on mount (create mode only)
+  useEffect(() => {
+    if (!isEditMode) {
+      serviceService.getMyServices(1, 1).then((result) => {
+        if (result.success) {
+          const total = result.pagination?.total || result.data?.length || 0;
+          if (total >= 3) setServiceLimitReached(true);
+        }
+      });
+    }
+  }, [isEditMode]);
 
   // Initialize form state with reducer
   const initialState = useMemo(() => createInitialState(editService), [editService]);
@@ -273,40 +324,63 @@ const CreateServiceScreen = ({ route }) => {
     const { data } = formState;
     const newErrors = {};
 
-    // Validate each field
-    Object.keys(data).forEach((field) => {
-      if (field === 'skills') return; // Skip skills array
-      const error = validateField(field, data[field], data);
-      if (error) newErrors[field] = error;
-    });
+      // Validate required fields
+      const requiredFields = ['title', 'description', 'category', 'serviceLocation', 'fullAddress', 'contactEmail'];
+      requiredFields.forEach((field) => {
+        const error = validateField(field, data[field]);
+        if (error) newErrors[field] = error;
+      });
 
-    // Validate pricing separately
-    const pricingError = validateField('pricing', '', data);
-    if (pricingError) newErrors.pricing = pricingError;
+      dispatch({ type: 'SET_ERRORS', errors: newErrors });
+      return Object.keys(newErrors).length === 0;
+    }, [formState, validateField]);
 
-    dispatch({ type: 'SET_ERRORS', errors: newErrors });
-    return Object.keys(newErrors).length === 0;
-  }, [formState, validateField]);
+    // Capture user coordinates on mount for service location
+    const [userCoords, setUserCoords] = useState(null);
+    useEffect(() => {
+      (async () => {
+        try {
+          const loc = await getCurrentLocation();
+          if (loc) setUserCoords({ latitude: loc.latitude, longitude: loc.longitude });
+        } catch (e) {
+          console.warn('Could not get location for service:', e);
+        }
+      })();
+    }, []);
 
-  const transformServiceData = useCallback(() => {
-    const { data } = formState;
-    return {
-      title: data.title.trim(),
-      description: data.description.trim(),
-      category: data.category,
-      subcategory: data.subcategory,
-      hourlyRate: data.hourlyRate ? parseFloat(data.hourlyRate) : null,
-      basePrice: data.basePrice ? parseFloat(data.basePrice) : null,
-      city: data.city.trim(),
-      state: data.state,
-      experience: data.experience,
-      skills: data.skills,
-    };
-  }, [formState]);
+    const transformServiceData = useCallback(() => {
+      const { data } = formState;
+      const serviceData = {
+        title: data.title.trim(),
+        description: data.description.trim(),
+        category: data.category,
+        pricing: data.pricing.trim(),
+        serviceLocation: data.serviceLocation.trim(),
+        fullAddress: data.fullAddress.trim(),
+        contactEmail: data.contactEmail.trim(),
+        contactPhone: data.contactPhone.trim(),
+        website: data.website.trim(),
+        instagram: data.instagram.trim(),
+        facebook: data.facebook.trim(),
+        twitter: data.twitter.trim(),
+        linkedin: data.linkedin.trim(),
+      };
+      if (userCoords) {
+        serviceData.latitude = userCoords.latitude;
+        serviceData.longitude = userCoords.longitude;
+      }
+      return serviceData;
+    }, [formState, userCoords]);
 
-  const handleSubmit = useCallback(async () => {
+    const handleSubmit = useCallback(async () => {
     if (!validateForm()) {
       scrollRef.current?.scrollToPosition(0, 0, true);
+      return;
+    }
+
+    // Client-side limit check (create mode only)
+    if (!isEditMode && serviceLimitReached) {
+      Alert.alert('Limit Reached', 'You can create a maximum of 3 services. Please delete an existing service first.');
       return;
     }
 
@@ -325,12 +399,14 @@ const CreateServiceScreen = ({ route }) => {
 
       if (result?.success) {
         Alert.alert(
-          'Success',
-          result.message || (isEditMode ? 'Service updated successfully' : 'Service created and pending admin approval'),
+          isEditMode ? 'Update Submitted for Review' : 'Service Submitted',
+          isEditMode
+            ? 'Your changes have been submitted and are now pending admin review. Once approved, your updates will be visible to all users.'
+            : 'Your service has been submitted and is pending admin approval. You\'ll be notified once it\'s live.',
           [
             {
-              text: 'OK',
-              onPress: () => navigation.navigate('MyServices'),
+              text: 'View My Services',
+              onPress: () => navigation.navigate('Services'),
             },
           ]
         );
@@ -343,7 +419,7 @@ const CreateServiceScreen = ({ route }) => {
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false });
     }
-  }, [validateForm, transformServiceData, isEditMode, editService, navigation]);
+  }, [validateForm, transformServiceData, isEditMode, editService, navigation, serviceLimitReached]);
 
   const handleCancel = useCallback(() => {
     const hasContent = formState.data.title.trim() || formState.data.description.trim();
@@ -372,12 +448,17 @@ const CreateServiceScreen = ({ route }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleCancel} style={styles.headerBtn}>
+          <TouchableOpacity onPress={handleCancel} style={styles.headerBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="close" size={24} color={Colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {isEditMode ? 'Edit Service' : 'Create Service'}
-          </Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>
+              {isEditMode ? 'Edit Service' : 'New Listing'}
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              {isEditMode ? 'Update your service details' : 'Create a new service listing'}
+            </Text>
+          </View>
           <View style={styles.headerBtn} />
         </View>
 
@@ -387,44 +468,38 @@ const CreateServiceScreen = ({ route }) => {
           style={styles.form}
           contentContainerStyle={styles.formContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {/* Section: Basic Info */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Ionicons name="information-circle" size={18} color={ACCENT} /> Basic Information
-            </Text>
+          {/* Service Limit Banner */}
+          {!isEditMode && serviceLimitReached && (
+            <View style={styles.limitBanner}>
+              <Ionicons name="alert-circle" size={20} color="#DC2626" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.limitBannerTitle}>Service Limit Reached</Text>
+                <Text style={styles.limitBannerText}>You can create a maximum of 3 services. Delete an existing service to create a new one.</Text>
+              </View>
+            </View>
+          )}
 
+          {/* ── Section 1: Basic Info ── */}
+          <SectionCard
+            title="Basic Information"
+            icon="document-text"
+            subtitle="Tell us about your service"
+          >
             <InputField
               label="Service Title"
               icon="briefcase"
-              placeholder="e.g., Senior React Development Consulting"
+              placeholder="e.g., Professional Photography Services"
               value={data.title}
               onChangeText={(value) => handleFieldChange('title', value)}
               error={errors.title}
               required
+              maxLength={200}
             />
-
-            <InputField
-              label="Description"
-              icon="document-text"
-              placeholder="Describe what your service includes, who it's for, and what results clients can expect..."
-              value={data.description}
-              onChangeText={(value) => handleFieldChange('description', value)}
-              multiline
-              numberOfLines={5}
-              error={errors.description}
-              required
-            />
-          </View>
-
-          {/* Section: Category & Expertise */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Ionicons name="grid" size={18} color={ACCENT} /> Category & Expertise
-            </Text>
 
             <SelectField
-              label="Service Category"
+              label="Category"
               options={SERVICE_CATEGORIES}
               value={data.category}
               onValueChange={(value) => handleFieldChange('category', value)}
@@ -433,91 +508,170 @@ const CreateServiceScreen = ({ route }) => {
             />
 
             <InputField
-              label="Years of Experience"
-              icon="time"
-              placeholder="e.g., 8 years"
-              value={data.experience}
-              onChangeText={(value) => handleFieldChange('experience', value)}
+              label="Description"
+              icon="reader"
+              placeholder="Describe what your service includes, who it's for, and what results clients can expect..."
+              value={data.description}
+              onChangeText={(value) => handleFieldChange('description', value)}
+              multiline
+              numberOfLines={6}
+              error={errors.description}
+              helperText="Provide a detailed description (minimum 50 characters recommended)"
+              required
+              maxLength={5000}
             />
 
-            <SkillsInput 
-              skills={data.skills} 
-              onChange={(skills) => handleFieldChange('skills', skills)}
+            <InputField
+              label="Pricing"
+              icon="pricetag"
+              placeholder="e.g., $50/hour, $200-500/project, Free consultation"
+              value={data.pricing}
+              onChangeText={(value) => handleFieldChange('pricing', value)}
+              helperText="Describe your pricing structure (optional but recommended)"
             />
-          </View>
+          </SectionCard>
 
-          {/* Section: Pricing */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Ionicons name="cash" size={18} color={ACCENT} /> Pricing
-            </Text>
+          {/* ── Section 2: Location ── */}
+          <SectionCard
+            title="Location & Address"
+            icon="location"
+            subtitle="Where can clients find you?"
+          >
+            <InputField
+              label="Service Location"
+              icon="business"
+              placeholder="e.g., Manhattan Studio, Remote, Home visits"
+              value={data.serviceLocation}
+              onChangeText={(value) => handleFieldChange('serviceLocation', value)}
+              error={errors.serviceLocation}
+              helperText="Where do you provide this service?"
+              required
+            />
 
-            <View style={styles.twoColumnRow}>
-              <InputField
-                label="Hourly Rate"
-                icon="time"
-                placeholder="$50"
-                value={data.hourlyRate}
-                onChangeText={(value) => handleFieldChange('hourlyRate', value)}
-                keyboardType="decimal-pad"
-              />
-              <InputField
-                label="Base Price"
-                icon="pricetag"
-                placeholder="$500"
-                value={data.basePrice}
-                onChangeText={(value) => handleFieldChange('basePrice', value)}
-                keyboardType="decimal-pad"
-              />
-            </View>
+            <InputField
+              label="Full Address"
+              icon="map"
+              placeholder="e.g., 123 34th Street, New York, NY 10001"
+              value={data.fullAddress}
+              onChangeText={(value) => handleFieldChange('fullAddress', value)}
+              error={errors.fullAddress}
+              helperText="Business address shown to members & used for distance"
+              required
+            />
+          </SectionCard>
 
-            {errors.pricing && (
-              <Text style={styles.errorText}>{errors.pricing}</Text>
-            )}
+          {/* ── Section 3: Contact ── */}
+          <SectionCard
+            title="Contact Information"
+            icon="call"
+            subtitle="How can clients reach you?"
+          >
+            <InputField
+              label="Contact Email"
+              icon="mail"
+              placeholder="your@email.com"
+              value={data.contactEmail}
+              onChangeText={(value) => handleFieldChange('contactEmail', value)}
+              error={errors.contactEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              required
+            />
 
-            <Text style={styles.helperText}>
-              Enter either hourly rate or base price (or both)
-            </Text>
-          </View>
+            <InputField
+              label="Contact Phone"
+              icon="call"
+              placeholder="(555) 123-4567"
+              value={data.contactPhone}
+              onChangeText={(value) => handleFieldChange('contactPhone', value)}
+              keyboardType="phone-pad"
+              helperText="Optional — recommended for faster communication"
+            />
+          </SectionCard>
 
-          {/* Section: Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              <Ionicons name="location" size={18} color={ACCENT} /> Service Location
-            </Text>
+          {/* ── Section 4: Online Presence ── */}
+          <SectionCard
+            title="Online Presence"
+            icon="globe"
+            subtitle="Optional — help clients learn more about you"
+          >
+            <InputField
+              label="Website"
+              icon="globe-outline"
+              placeholder="https://yourwebsite.com"
+              value={data.website}
+              onChangeText={(value) => handleFieldChange('website', value)}
+              keyboardType="url"
+              autoCapitalize="none"
+            />
 
-            <View style={styles.twoColumnRow}>
-              <InputField
-                label="City"
-                icon="location"
-                placeholder="e.g., New York"
-                value={data.city}
-                onChangeText={(value) => handleFieldChange('city', value)}
-                error={errors.city}
-                required
-              />
-              <SelectField
-                label="State"
-                options={useMemo(() => US_STATES.map((s) => ({ value: s, label: s })), [])}
-                value={data.state}
-                onValueChange={(value) => handleFieldChange('state', value)}
-                error={errors.state}
-                required
-              />
-            </View>
-          </View>
+            <InputField
+              label="Instagram"
+              icon="logo-instagram"
+              placeholder="@yourusername"
+              value={data.instagram}
+              onChangeText={(value) => handleFieldChange('instagram', value)}
+              autoCapitalize="none"
+            />
 
-          {/* Section: Info Box */}
+            <InputField
+              label="Facebook"
+              icon="logo-facebook"
+              placeholder="facebook.com/yourpage"
+              value={data.facebook}
+              onChangeText={(value) => handleFieldChange('facebook', value)}
+              autoCapitalize="none"
+            />
+
+            <InputField
+              label="Twitter / X"
+              icon="logo-twitter"
+              placeholder="@yourhandle"
+              value={data.twitter}
+              onChangeText={(value) => handleFieldChange('twitter', value)}
+              autoCapitalize="none"
+            />
+
+            <InputField
+              label="LinkedIn"
+              icon="logo-linkedin"
+              placeholder="linkedin.com/in/yourprofile"
+              value={data.linkedin}
+              onChangeText={(value) => handleFieldChange('linkedin', value)}
+              autoCapitalize="none"
+            />
+          </SectionCard>
+
+          {/* ── Verification Info Box ── */}
           <View style={styles.infoBox}>
-            <Ionicons name="information-circle" size={20} color={ACCENT} />
+            <View style={styles.infoIconCircle}>
+              <Ionicons name="shield-checkmark" size={20} color={ACCENT} />
+            </View>
             <View style={styles.infoContent}>
-              <Text style={styles.infoTitle}>Admin Approval Required</Text>
-              <Text style={styles.infoText}>
-                Your service will be reviewed by our admin team before appearing on the public Services feed. You'll receive
-                a notification once it's approved or if revisions are needed.
-              </Text>
+              <Text style={styles.infoTitle}>Verification Process</Text>
+              <View style={styles.infoList}>
+                <View style={styles.infoListRow}>
+                  <View style={styles.bulletDot} />
+                  <Text style={styles.infoListItem}>Your service will be reviewed within 1–2 business days</Text>
+                </View>
+                <View style={styles.infoListRow}>
+                  <View style={styles.bulletDot} />
+                  <Text style={styles.infoListItem}>We verify provider identity and service legitimacy</Text>
+                </View>
+                <View style={styles.infoListRow}>
+                  <View style={styles.bulletDot} />
+                  <Text style={styles.infoListItem}>Once approved, your service will be visible to all members</Text>
+                </View>
+                <View style={styles.infoListRow}>
+                  <View style={styles.bulletDot} />
+                  <Text style={styles.infoListItem}>You'll receive a notification when your listing is live</Text>
+                </View>
+              </View>
             </View>
           </View>
+
+          {/* Bottom spacer */}
+          <View style={{ height: 20 }} />
         </ScrollView>
 
         {/* Footer Buttons */}
@@ -526,17 +680,19 @@ const CreateServiceScreen = ({ route }) => {
             style={styles.cancelBtn}
             onPress={handleCancel}
             disabled={loading}
+            activeOpacity={0.7}
           >
             <Text style={styles.cancelBtnText}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.submitBtn}
+            style={[styles.submitBtn, loading && { opacity: 0.7 }]}
             onPress={handleSubmit}
             disabled={loading}
+            activeOpacity={0.8}
           >
             <LinearGradient
-              colors={[ACCENT, '#900C3F']}
+              colors={[ACCENT, ACCENT_DARK]}
               style={styles.submitBtnGradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
@@ -544,9 +700,12 @@ const CreateServiceScreen = ({ route }) => {
               {loading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.submitBtnText}>
-                  {isEditMode ? 'Update Service' : 'Create Service'}
-                </Text>
+                <>
+                  <Ionicons name="shield-checkmark-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.submitBtnText}>
+                    {isEditMode ? 'Update Service' : 'Submit for Verification'}
+                  </Text>
+                </>
               )}
             </LinearGradient>
           </TouchableOpacity>
@@ -557,209 +716,306 @@ const CreateServiceScreen = ({ route }) => {
 };
 
 const styles = StyleSheet.create({
+  // ─── Layout ──────────────────────────────────────────────
   container: {
     flex: 1,
-    backgroundColor: Colors.background || '#f8f7f5',
+    backgroundColor: '#F4F3F8',
   },
   keyboardAvoid: {
     flex: 1,
   },
+
+  // ─── Header ──────────────────────────────────────────────
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 14,
     backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e8e8e8',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.04, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
+      android: { elevation: 2 },
+    }),
   },
   headerBtn: {
-    width: 24,
-    height: 24,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: Colors.text,
+    color: Colors.text || '#1A1A2E',
+    letterSpacing: -0.3,
   },
+  headerSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+
+  // ─── Form Scroll ─────────────────────────────────────────
   form: {
     flex: 1,
   },
   formContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 100,
+    paddingTop: 20,
+    paddingBottom: 120,
   },
-  section: {
-    marginBottom: 28,
+
+  // ─── Section Cards ────────────────────────────────────────
+  sectionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: 3 }, shadowRadius: 10 },
+      android: { elevation: 3 },
+    }),
   },
-  sectionTitle: {
-    fontSize: 16,
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 4,
+    gap: 12,
+  },
+  sectionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: ACCENT_LIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sectionCardTitle: {
+    fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 16,
+    color: Colors.text || '#1A1A2E',
+    letterSpacing: -0.2,
   },
-  inputContainer: {
-    marginBottom: 16,
+  sectionCardSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 1,
   },
-  inputLabel: {
-    fontSize: 14,
+  sectionCardBody: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 6,
+  },
+
+  // ─── Field Group ──────────────────────────────────────────
+  fieldGroup: {
+    marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.text,
+    color: Colors.textSecondary || '#555',
     marginBottom: 8,
+    letterSpacing: 0.1,
   },
   required: {
-    color: '#e53e3e',
+    color: Colors.error || '#DC2626',
+    fontWeight: '700',
   },
-  inputWrapper: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
-    paddingHorizontal: 12,
-    height: 44,
+
+  // ─── Text Input ───────────────────────────────────────────
+  fieldInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
+    minHeight: 48,
+  },
+  fieldMultilineWrap: {
+    minHeight: 120,
+    alignItems: 'flex-start',
+    paddingVertical: 4,
+  },
+  fieldInputFilled: {
+    borderColor: `${ACCENT}40`,
+    backgroundColor: '#FDFBFE',
+  },
+  fieldInputError: {
+    borderColor: Colors.error || '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  fieldIconWrap: {
+    width: 42,
     justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 0 : 2,
   },
-  multilineWrapper: {
-    minHeight: 100,
-    paddingVertical: 12,
+  fieldInput: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.text || '#1A1A2E',
+    paddingHorizontal: 14,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 12,
+    lineHeight: 20,
   },
-  input: {
-    fontSize: 14,
-    color: Colors.text,
+  fieldInputWithIcon: {
+    paddingLeft: 0,
   },
-  multilineInput: {
+  fieldMultilineInput: {
     textAlignVertical: 'top',
+    minHeight: 100,
   },
-  inputError: {
-    borderColor: '#e53e3e',
-    backgroundColor: '#fff5f5',
-  },
-  errorText: {
-    color: '#e53e3e',
-    fontSize: 12,
+
+  // ─── Helper / Error text ──────────────────────────────────
+  helperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 6,
+    gap: 5,
+    paddingLeft: 2,
   },
   helperText: {
+    flex: 1,
     fontSize: 12,
-    color: Colors.textSecondary,
-    marginTop: 6,
+    color: Colors.textMuted,
+    lineHeight: 16,
   },
-  selectContainer: {
-    marginBottom: 16,
-  },
-  selectField: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
-    paddingHorizontal: 12,
-    height: 44,
+  errorRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 6,
+    gap: 5,
+    paddingLeft: 2,
   },
-  selectText: {
-    fontSize: 14,
-    color: Colors.text,
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.error || '#DC2626',
+    fontWeight: '500',
+  },
+
+  // ─── Select Trigger ───────────────────────────────────────
+  selectTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E5EA',
+    minHeight: 48,
+  },
+  selectTriggerText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.text || '#1A1A2E',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
   selectPlaceholder: {
-    color: Colors.textMuted,
+    color: '#B0B0B0',
   },
-  dropdown: {
+  selectChevronWrap: {
+    paddingRight: 14,
+  },
+
+  // ─── Modal Bottom Sheet ───────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
-    marginTop: 0,
-    maxHeight: 200,
-    zIndex: 1000,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '60%',
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  dropdownItemActive: {
-    backgroundColor: '#f0e8f8',
-  },
-  dropdownItemText: {
-    fontSize: 14,
-    color: Colors.text,
-  },
-  dropdownItemTextActive: {
-    fontWeight: '600',
-    color: ACCENT,
-  },
-  skillsContainer: {
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D1D6',
+    alignSelf: 'center',
     marginBottom: 16,
   },
-  skillsInputRow: {
-    flexDirection: 'row',
-    gap: 8,
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.text || '#1A1A2E',
+    paddingHorizontal: 20,
     marginBottom: 12,
+    letterSpacing: -0.2,
   },
-  skillsInput: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: Colors.text,
-    height: 44,
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 2,
   },
-  skillsAddBtn: {
-    width: 44,
-    height: 44,
+  modalOptionActive: {
+    backgroundColor: ACCENT_LIGHT,
+  },
+  modalOptionIcon: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: `${ACCENT}15`,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 14,
   },
-  skillsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  skillBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  modalOptionIconActive: {
     backgroundColor: ACCENT,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
   },
-  skillText: {
-    fontSize: 12,
-    color: '#fff',
-    fontWeight: '600',
+  modalOptionText: {
+    flex: 1,
+    fontSize: 15,
+    color: Colors.text || '#1A1A2E',
+    fontWeight: '500',
   },
-  twoColumnRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 0,
+  modalOptionTextActive: {
+    fontWeight: '700',
+    color: ACCENT,
   },
-  twoColumnRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+
+  // ─── Info Box ─────────────────────────────────────────────
   infoBox: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 14,
-    backgroundColor: '#f0e8f8',
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: ACCENT,
-    marginBottom: 20,
+    gap: 14,
+    padding: 18,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: `${ACCENT}25`,
+    marginBottom: 8,
+    ...Platform.select({
+      ios: { shadowColor: ACCENT, shadowOpacity: 0.06, shadowOffset: { width: 0, height: 2 }, shadowRadius: 8 },
+      android: { elevation: 1 },
+    }),
+  },
+  infoIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: ACCENT_LIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoContent: {
     flex: 1,
@@ -768,50 +1024,96 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: ACCENT,
-    marginBottom: 4,
+    marginBottom: 10,
   },
-  infoText: {
-    fontSize: 12,
-    color: Colors.text,
+  infoList: {
+    gap: 8,
+  },
+  infoListRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  bulletDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: ACCENT,
+    marginTop: 6,
+  },
+  infoListItem: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary || '#555',
     lineHeight: 18,
   },
+
+  // ─── Footer ───────────────────────────────────────────────
   footer: {
     flexDirection: 'row',
     gap: 12,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e8e8e8',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.06, shadowOffset: { width: 0, height: -3 }, shadowRadius: 6 },
+      android: { elevation: 8 },
+    }),
   },
   cancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: ACCENT,
+    flex: 0.4,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FAFAFA',
   },
   cancelBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: ACCENT,
+    color: Colors.textSecondary,
   },
   submitBtn: {
-    flex: 1,
-    borderRadius: 10,
+    flex: 0.6,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   submitBtnGradient: {
-    paddingVertical: 12,
+    flexDirection: 'row',
+    paddingVertical: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
   submitBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#fff',
+    letterSpacing: -0.2,
+  },
+  limitBanner: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#DC2626',
+    marginBottom: 16,
+  },
+  limitBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+    marginBottom: 2,
+  },
+  limitBannerText: {
+    fontSize: 12,
+    color: '#991B1B',
+    lineHeight: 17,
   },
 });
 

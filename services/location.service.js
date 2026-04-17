@@ -117,7 +117,7 @@ export const getCurrentLocation = async () => {
     const locationData = {
       latitude,
       longitude,
-      currentCity: currentCity || `${latitude.toFixed(2)}, ${longitude.toFixed(2)}`, // Fallback to coords if no city
+      currentCity: currentCity || 'Unknown Location',
       timestamp: Date.now(),
     };
 

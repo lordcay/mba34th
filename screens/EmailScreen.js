@@ -15,8 +15,10 @@ import {
   Linking,
   Modal,
   FlatList,
+  Animated,
+  Dimensions,
 } from "react-native";
-import React, { useState, useEffect, useLayoutEffect, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -29,6 +31,8 @@ const universities = [
   { name: "Choose a university", extension: "" },
   { name: "American Uni.", extension: "@american.edu" },
   { name: "Arizona State", extension: "@asu.edu" },
+    { name: "Auburn University", extension: "@auburn.edu" },
+
   { name: "Babson", extension: "@babson.edu" },
   { name: "Bayes", extension: "@city.ac.uk" },
   { name: "Boston University", extension: "@bu.edu" },
@@ -36,7 +40,7 @@ const universities = [
   { name: "Canada West", extension: "@ucanada.ca" },
   { name: "Carnegie Mellon", extension: "@tepper.cmu.edu" },
   { name: "Chicago Booth", extension: "@chicagobooth.edu" },
-  { name: "Columbia", extension: "@gsbcolumbia.edu" },
+  { name: "Columbia", extension: "@gsb.columbia.edu" },
   { name: "Cornell", extension: "@cornell.edu" },
   { name: "Cranfield", extension: "@cranfield.ac.uk" },
   { name: "Darden", extension: "@darden.virginia.edu" },
@@ -83,6 +87,9 @@ const universities = [
   { name: "Uni. of Rochester", extension: "@rochester.edu" },
   { name: "Uni.of Cambridge", extension: "@jbs.cam.ac.uk" },
   { name: "Uni.of Minnesota", extension: "@umn.edu" },
+    { name: "University of California", extension: "@berkeley.edu" },
+    { name: "University of Utah", extension: "@utah.edu" },
+
   { name: "USC", extension: "@usc.edu" },
   { name: "UT Austin", extension: "@my.utexas.edu" },
   { name: "Vanderbilt", extension: "@vanderbilt.edu" },
@@ -117,23 +124,42 @@ const EmailScreen = () => {
   const [schoolModalVisible, setSchoolModalVisible] = useState(false);
   const [schoolQuery, setSchoolQuery] = useState("");
 
-  // ✅ kbHeight is ONLY for the modal
+  // ✅ Animated keyboard tracking for the modal
+  const kbAnim = useRef(new Animated.Value(0)).current;
   const [kbHeight, setKbHeight] = useState(0);
 
   useEffect(() => {
     if (!schoolModalVisible) {
       setKbHeight(0);
+      kbAnim.setValue(0);
       return;
     }
 
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
-      (e) => setKbHeight(e.endCoordinates?.height || 0)
+      (e) => {
+        const h = e.endCoordinates?.height || 0;
+        setKbHeight(h);
+        Animated.spring(kbAnim, {
+          toValue: h,
+          useNativeDriver: false,
+          damping: 20,
+          stiffness: 200,
+        }).start();
+      }
     );
 
     const hide = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
-      () => setKbHeight(0)
+      () => {
+        setKbHeight(0);
+        Animated.spring(kbAnim, {
+          toValue: 0,
+          useNativeDriver: false,
+          damping: 20,
+          stiffness: 200,
+        }).start();
+      }
     );
 
     return () => {
@@ -232,6 +258,16 @@ const EmailScreen = () => {
   };
 
   const selectSchool = (schoolName) => {
+    if (schoolName === '__SCHOOL_NOT_LISTED__') {
+      closeSchoolPicker();
+      navigation.navigate('SchoolNotListed');
+      return;
+    }
+    if (schoolName === '__ALUMNI__') {
+      closeSchoolPicker();
+      navigation.navigate('Alumni');
+      return;
+    }
     setSelectedUniversity(schoolName);
     setErrorMessage("");
     closeSchoolPicker();
@@ -307,10 +343,11 @@ const EmailScreen = () => {
               <Text style={styles.noteText}>Email verification helps us keep our community safe.</Text>
 
               <Text style={styles.noteText2}>
-                If your school isn’t listed, kindly email us at{" "}
-                <Text style={styles.mailLink} accessibilityRole="link" onPress={openEmailClient}>
-                  {SUPPORT_EMAIL}
+                If your school isn’t listed, select{" "}
+                <Text style={styles.mailLink} onPress={() => navigation.navigate('SchoolNotListed')}>
+                  School Not Listed
                 </Text>
+                {" "}from the dropdown to apply.
               </Text>
 
               <TouchableOpacity onPress={handleNext} activeOpacity={0.85} style={styles.nextButton}>
@@ -321,25 +358,31 @@ const EmailScreen = () => {
 
           {/* ✅ Modal: keyboard-aware bottom sheet */}
           <Modal visible={schoolModalVisible} animationType="slide" transparent onRequestClose={closeSchoolPicker}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-              <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+              <TouchableWithoutFeedback onPress={closeSchoolPicker}>
                 <View style={styles.modalOverlay} />
               </TouchableWithoutFeedback>
 
-              <View
+              <Animated.View
                 style={[
                   styles.modalCard,
                   {
-                    paddingTop: 14,
-                    paddingBottom: (kbHeight ? kbHeight * 0.15 : 16) + insets.bottom,
+                    bottom: kbAnim,
+                    paddingBottom: kbHeight ? 8 : insets.bottom + 16,
+                    maxHeight: Dimensions.get('window').height - (kbHeight || 0) - insets.top - 20,
                   },
                 ]}
               >
-                <View style={styles.modalTopRow}>
-                  <TouchableOpacity onPress={closeSchoolPicker} activeOpacity={0.8} style={styles.cancelBtn}>
-                    <Text style={styles.cancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
+                {/* Drag handle */}
+                <TouchableOpacity activeOpacity={1} onPress={Keyboard.dismiss}>
+                  <View style={styles.dragHandle} />
+
+                  <View style={styles.modalTopRow}>
+                    <Text style={styles.modalTitle}>Select School</Text>
+                    <TouchableOpacity onPress={closeSchoolPicker} activeOpacity={0.7} style={styles.cancelBtn}>
+                      <Ionicons name="close-circle" size={28} color="#581845" />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
 
                 <View style={styles.searchWrap}>
                   <Ionicons name="search" size={18} color="#777" />
@@ -349,16 +392,41 @@ const EmailScreen = () => {
                     placeholder="Search your school (e.g., Duke, Darden...)"
                     placeholderTextColor="#999"
                     style={styles.searchInput}
-                    autoFocus
                   />
                 </View>
 
                 <FlatList
                   data={filteredUniversities}
                   keyExtractor={(item) => `${item.name}_${item.extension}`}
-                  keyboardShouldPersistTaps="always"
-                  contentContainerStyle={{ paddingBottom: kbHeight + 24 }}
-                  style={{ maxHeight: 420 }}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingBottom: 8 }}
+                  style={{ flexShrink: 1 }}
+                  ListHeaderComponent={
+                    <>
+                      <TouchableOpacity
+                        style={[styles.schoolRow, styles.schoolNotListedRow]}
+                        onPress={() => selectSchool('__SCHOOL_NOT_LISTED__')}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Ionicons name="add-circle-outline" size={18} color="#581845" />
+                          <Text style={[styles.schoolName, { color: '#581845' }]}>School Not Listed</Text>
+                        </View>
+                        <Text style={[styles.schoolDomain, { color: '#581845', fontWeight: '600' }]}>Apply here</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.schoolRow, styles.alumniRow]}
+                        onPress={() => selectSchool('__ALUMNI__')}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Ionicons name="briefcase-outline" size={18} color="#581845" />
+                          <Text style={[styles.schoolName, { color: '#581845' }]}>Alumni / Professional</Text>
+                        </View>
+                        <Text style={[styles.schoolDomain, { color: '#581845', fontWeight: '600' }]}>Graduated / Working</Text>
+                      </TouchableOpacity>
+                    </>
+                  }
                   renderItem={({ item }) => (
                     <TouchableOpacity style={styles.schoolRow} onPress={() => selectSchool(item.name)}>
                       <Text style={styles.schoolName}>{item.name}</Text>
@@ -366,8 +434,7 @@ const EmailScreen = () => {
                     </TouchableOpacity>
                   )}
                 />
-              </View>
-            </KeyboardAvoidingView>
+              </Animated.View>
           </Modal>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -459,32 +526,51 @@ const styles = StyleSheet.create({
   },
 
   modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
 
   modalCard: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     backgroundColor: "#fff",
-    padding: 16,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+    overflow: 'hidden',
+  },
+
+  dragHandle: {
+    width: 40,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#ddd',
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: -0.3,
   },
 
   modalTopRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    marginBottom: 14,
   },
   cancelBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  cancelText: {
-    color: "#581845",
-    fontWeight: "900",
-    fontSize: 14,
+    padding: 2,
   },
 
   searchWrap: {
@@ -514,6 +600,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginBottom: 10,
+  },
+  schoolNotListedRow: {
+    backgroundColor: '#f5edf8',
+    borderColor: '#581845',
+    borderWidth: 1.5,
+  },
+  alumniRow: {
+    backgroundColor: '#f5edf8',
+    borderColor: '#581845',
+    borderWidth: 1.5,
   },
   schoolName: { fontSize: 15, fontWeight: "800", color: "#111" },
   schoolDomain: { marginTop: 3, fontSize: 12, color: "#777", fontWeight: "600" },

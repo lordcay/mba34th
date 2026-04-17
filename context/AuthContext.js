@@ -11,6 +11,12 @@ import { useUnread } from '../context/UnreadContext';
 import { Platform } from 'react-native';
 import { navigationRef } from '../navigation/RootNavigation';
 import { registerAuthLogoutHandler } from '../services/api';
+import { API_BASE_URL } from '../config';
+import {
+  saveBiometricCredentials,
+  updateBiometricToken,
+  isBiometricEnabled,
+} from '../services/biometric.service';
 
 
 const AuthContext = createContext();
@@ -39,7 +45,7 @@ const AuthProvider = ({ children }) => {
     const expiryMs = getTokenExpiryMs(jwt);
     return expiryMs ? expiryMs - Date.now() <= withinMs : false;
   };
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
 
   // ✅ Properly use UnreadContext
@@ -47,14 +53,14 @@ const AuthProvider = ({ children }) => {
   const unreadState = unreadCtx?.state ?? null;  // null-safe
   const unreadDispatch = unreadCtx?.dispatch;    // null-safe
 
-  const login = async (token, userId) => {
+  const login = async (token, userId, email) => {
     try {
       await AsyncStorage.setItem('token', token);
       await AsyncStorage.setItem('userId', userId);
       setToken(token);
       setUserId(userId);
 
-      const res = await axios.get(`https://three4th-street-backend.onrender.com/accounts/${userId}`, {
+      const res = await axios.get(`${API_BASE_URL}/accounts/${userId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -62,6 +68,12 @@ const AuthProvider = ({ children }) => {
         setUser(res.data.user);
         await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
         socket.emit('register', userId);
+
+        // Update biometric credentials if biometric login is enabled
+        const bioEnabled = await isBiometricEnabled();
+        if (bioEnabled && email) {
+          await saveBiometricCredentials(email, token, userId);
+        }
       } else {
         console.warn("⚠️ Login response didn't include user data");
       }
@@ -116,7 +128,7 @@ const AuthProvider = ({ children }) => {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
       } else if (storedToken && storedUserId) {
-        const res = await axios.get(`http://192.168.100.28:4000/accounts/${storedUserId}`, {
+        const res = await axios.get(`${API_BASE_URL}/accounts/${storedUserId}`, {
           headers: { Authorization: `Bearer ${storedToken}` },
         });
 
@@ -342,7 +354,7 @@ export { AuthContext, AuthProvider };
 //       setToken(token);
 //       setUserId(userId);
 
-//       const res = await axios.get(`http://192.168.100.28:4000/accounts/${userId}`, {
+//       const res = await axios.get(`http://192.168.14.134:4000/accounts/${userId}`, {
 //         headers: { Authorization: `Bearer ${token}` },
 //       });
 
@@ -384,7 +396,7 @@ export { AuthContext, AuthProvider };
 //         const parsedUser = JSON.parse(storedUser);
 //         setUser(parsedUser);
 //       } else if (storedToken && storedUserId) {
-//         const res = await axios.get(`http://192.168.100.28:4000/accounts/${storedUserId}`, {
+//         const res = await axios.get(`http://192.168.14.134:4000/accounts/${storedUserId}`, {
 //           headers: { Authorization: `Bearer ${storedToken}` },
 //         });
 

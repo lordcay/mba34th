@@ -1,18 +1,17 @@
-// PasswordScreen.js
 import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  TextInput,
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import {
   getRegistrationProgress,
@@ -20,139 +19,165 @@ import {
 } from '../registrationUtils';
 import Fontisto from 'react-native-vector-icons/Fontisto';
 import { ScrollView } from 'react-native';
-import { Pressable } from 'react-native';
-import FontAwesome from 'react-native-vector-icons/FontAwesome';
+
+const capitalizeFirst = (str) => {
+  if (!str) return '';
+  return str.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+};
 
 const LocationScreen = () => {
   const navigation = useNavigation();
 
-  const [region, setRegion] = useState({
-    latitude: 37.7749, // Default to San Francisco
-    longitude: -122.4194,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  });
   const [location, setLocation] = useState('');
+  const [detecting, setDetecting] = useState(false);
+  const [detected, setDetected] = useState(false);
   const [errorMsg, setErrorMsg] = useState(null);
+  const [manualEdit, setManualEdit] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      // Request location permissions
+  const detectCity = async () => {
+    try {
+      setDetecting(true);
+      setErrorMsg(null);
+
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        Alert.alert('Permission Denied', 'Enable location permissions to proceed.');
+        setErrorMsg('Location permission denied. You can type your city manually.');
+        setManualEdit(true);
         return;
       }
 
-      // Get the current location
-      let currentLocation = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = currentLocation.coords;
-
-      // Update region and marker
-      setRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.0922,
-        longitudeDelta: 0.0421,
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Platform.OS === 'android' ? Location.Accuracy.High : Location.Accuracy.Balanced,
       });
 
-      // Reverse geocode to get human-readable location
-      let reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      const { latitude, longitude } = position.coords;
+      const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+
       if (reverseGeocode.length > 0) {
-        const { city, country } = reverseGeocode[0];
-        const formattedLocation = `${capitalizeFirst(city)}, ${capitalizeFirst(country)}`;
-        setLocation(formattedLocation);
+        const geo = reverseGeocode[0];
+        const city = geo.city || geo.subregion || geo.district || geo.name || '';
+        const country = geo.country || '';
+        const formatted = [capitalizeFirst(city), capitalizeFirst(country)].filter(Boolean).join(', ');
+        setLocation(formatted || 'Unknown Location');
+        setDetected(true);
+      } else {
+        setErrorMsg('Could not detect your city. Please type it manually.');
+        setManualEdit(true);
       }
+    } catch (error) {
+      console.error('Location error:', error);
+      setErrorMsg('Failed to detect location. Please type your city manually.');
+      setManualEdit(true);
+    } finally {
+      setDetecting(false);
+    }
+  };
 
-
-    })();
+  useEffect(() => {
+    detectCity();
   }, []);
 
-
-  const handleMarkerDragEnd = async (coordinate) => {
-    const { latitude, longitude } = coordinate;
-    setRegion({ ...region, latitude, longitude });
-
-    // Reverse geocode the new location
-    let reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-    if (reverseGeocode.length > 0) {
-      const { city, country } = reverseGeocode[0];
-      const formattedLocation = `${capitalizeFirst(city)}, ${capitalizeFirst(country)}`;
-      setLocation(formattedLocation);
-    }
-
-
-  };
-
   const handleNext = () => {
-    saveRegistrationProgress('Location', { location });
-    // Navigate to the next screen
+    if (!location.trim()) {
+      setErrorMsg('Please provide your city to continue.');
+      return;
+    }
+    saveRegistrationProgress('Location', { location: location.trim() });
     navigation.navigate('Type');
   };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.innerContainer}
+        style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.header}>
             <Fontisto name="email" size={30} color="white" />
             <Text style={styles.headerTitle}>Join 34TH STREET</Text>
             <Text style={styles.headerSubtitle}>Connect across top universities</Text>
-
-            {/* Progress Bar */}
             <View style={styles.progressContainer}>
               <View style={[styles.progressBar, { width: '70%' }]} />
             </View>
           </View>
 
+          <View style={styles.content}>
+            <Text style={styles.title}>Your City</Text>
+            <Text style={styles.subtitle}>
+              We only capture your city — never your exact address or coordinates.
+            </Text>
 
-          <MapView
-            region={region}
-            style={styles.map}
-            showsUserLocation
-            showsMyLocationButton
-            onRegionChangeComplete={setRegion}
-          >
-            <Marker
-              // onDragEnd={e => handleMarkerDragEnd(e.nativeEvent.coordinate)}
-              draggable
-              coordinate={{ latitude: region.latitude, longitude: region.longitude }}
-              onDragEnd={(e) => handleMarkerDragEnd(e.nativeEvent.coordinate)}
-            >
-              <View style={styles.marker}>
-                <Text style={styles.markerText}>{location || 'Loading...'}</Text>
+            <View style={styles.cityCard}>
+              <View style={styles.cityIconCircle}>
+                <Ionicons
+                  name={detected ? 'location' : 'location-outline'}
+                  size={32}
+                  color={detected ? '#581845' : '#999'}
+                />
               </View>
-            </Marker>
-          </MapView>
 
-          {/* Next Button */}
-          <TouchableOpacity style={styles.nextButton}
+              {detecting ? (
+                <View style={styles.detectingRow}>
+                  <ActivityIndicator size="small" color="#581845" />
+                  <Text style={styles.detectingText}>Detecting your city...</Text>
+                </View>
+              ) : detected && !manualEdit ? (
+                <View style={styles.cityResultRow}>
+                  <Text style={styles.cityText}>{location}</Text>
+                  <TouchableOpacity onPress={() => setManualEdit(true)}>
+                    <Text style={styles.changeLink}>Change</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.manualInputRow}>
+                  <TextInput
+                    style={styles.cityInput}
+                    placeholder="e.g. New York, United States"
+                    placeholderTextColor="#999"
+                    value={location}
+                    onChangeText={setLocation}
+                    autoCapitalize="words"
+                  />
+                </View>
+              )}
+            </View>
+
+            {!detecting && !detected && !manualEdit && (
+              <TouchableOpacity style={styles.retryBtn} onPress={detectCity}>
+                <Ionicons name="refresh" size={18} color="#581845" />
+                <Text style={styles.retryText}>Try detecting again</Text>
+              </TouchableOpacity>
+            )}
+
+            {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
+
+            <View style={styles.privacyBox}>
+              <Ionicons name="shield-checkmark-outline" size={20} color="#581845" />
+              <Text style={styles.privacyText}>
+                Your exact location is never stored or shown. Only your city name is visible to other members. You can hide it anytime in settings.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.nextButton, !location.trim() && styles.nextButtonDisabled]}
             onPress={handleNext}
+            disabled={!location.trim()}
           >
             <Text style={styles.nextButtonText}>Next</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  )
-}
+  );
+};
 
-export default LocationScreen
+export default LocationScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-
-  headerText: {
-    marginTop: 20,
-    textAlign: 'center',
-    fontSize: 23,
-    fontFamily: 'GeezaPro-Bold',
-    color: 'white',
-  },
-  scrollContainer: { padding: 20 },
+  scrollContainer: { padding: 20, paddingBottom: 40 },
   header: {
     backgroundColor: '#581845',
     borderBottomLeftRadius: 100,
@@ -168,55 +193,77 @@ const styles = StyleSheet.create({
     marginTop: 20,
     overflow: 'hidden',
   },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#ffb60a',
-  },
+  progressBar: { height: '100%', backgroundColor: '#ffb60a' },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#fff', marginTop: 10 },
   headerSubtitle: { fontSize: 14, color: '#ffb60a', marginTop: 5 },
-  subHeaderText: {
-    marginTop: 10,
-    textAlign: 'center',
-    fontSize: 18,
-    fontFamily: 'GeezaPro-Bold',
-    color: '#ffb60a',
-    fontWeight: 'bold',
-  },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8, color: '#000' },
-  subtitle: { fontSize: 14, color: '#555', marginBottom: 30 },
-  label: { fontSize: 16, fontWeight: '600', marginBottom: 8 },
-  inputWrapper: {
-    flexDirection: 'row',
+  content: { marginTop: 30 },
+  title: { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 8 },
+  subtitle: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 24 },
+  cityCard: {
+    backgroundColor: '#faf5f9',
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderColor: '#f0e7ef',
+  },
+  cityIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f0e7ef',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 16,
   },
-  input: {
-    flex: 1,
+  detectingRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  detectingText: { fontSize: 15, color: '#666' },
+  cityResultRow: { alignItems: 'center', gap: 8 },
+  cityText: { fontSize: 20, fontWeight: '700', color: '#222', textAlign: 'center' },
+  changeLink: { fontSize: 14, color: '#581845', fontWeight: '600', textDecorationLine: 'underline' },
+  manualInputRow: { width: '100%' },
+  cityInput: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 14,
     height: 48,
-    fontSize: 16,
+    fontSize: 15,
+    color: '#222',
+    textAlign: 'center',
   },
-  errorText: {
-    color: 'red',
-    fontSize: 14,
-    marginBottom: 12,
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 16,
   },
+  retryText: { fontSize: 14, color: '#581845', fontWeight: '600' },
+  errorText: { color: '#dc3545', fontSize: 13, marginTop: 12, textAlign: 'center' },
+  privacyBox: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 24,
+    padding: 14,
+    backgroundColor: '#faf5f9',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#581845',
+  },
+  privacyText: { flex: 1, fontSize: 13, color: '#555', lineHeight: 19 },
   nextButton: {
     backgroundColor: '#581845',
     paddingVertical: 14,
-    borderRadius: 8,
-    marginTop: 20,
+    borderRadius: 10,
+    marginTop: 30,
   },
+  nextButtonDisabled: { opacity: 0.5 },
   nextButtonText: {
     textAlign: 'center',
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  map: { width: '100%', height: 400, marginTop: 20, borderRadius: 5 },
-  marker: { backgroundColor: 'black', padding: 8, borderRadius: 5 },
-  markerText: { color: 'white', fontSize: 14, fontWeight: '500' },
 });

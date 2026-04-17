@@ -12,10 +12,18 @@ import {
     TouchableOpacity,
     Alert,
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    ScrollView,
+    Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import axios from 'axios';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { API_BASE_URL } from '../config';
 
+const { width: SCREEN_W } = Dimensions.get('window');
+const scale = (size) => Math.round((SCREEN_W / 375) * size);
 
 const ResetPasswordScreen = ({ navigation }) => {
     const [token, setToken] = useState('');
@@ -26,17 +34,17 @@ const ResetPasswordScreen = ({ navigation }) => {
       useLayoutEffect(() => {
         navigation.setOptions({
           headerShown: true,
-          headerTransparent: false,     // Cleaner look
+          headerTransparent: false,
           headerTitle: '',
           headerBackTitle: 'Back',
           headerBackTitleVisible: true,
           headerStyle: {
-            backgroundColor: '#ffffff',   // Top bar background
+            backgroundColor: '#ffffff',
             borderBottomWidth: 0,
             elevation: 0,
             shadowOpacity: 0,
           },
-          headerTintColor: '#581845',     // Back icon color
+          headerTintColor: '#581845',
           headerShadowVisible: false,
         });
       }, [navigation]);
@@ -61,7 +69,7 @@ const ResetPasswordScreen = ({ navigation }) => {
             setLoading(true);
 
             const response = await axios.post(
-                'http://192.168.100.28:4000/accounts/reset-password', // 👈 Replace with your actual base URL
+                API_BASE_URL + '/accounts/reset-password',
                 {
                     token,
                     password,
@@ -84,81 +92,119 @@ const ResetPasswordScreen = ({ navigation }) => {
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Reset Password</Text>
-
-            <TextInput
-                style={styles.input}
-                placeholder="Enter 6-digit Code"
-                keyboardType="numeric"
-                value={token}
-                onChangeText={setToken}
-            />
-
-            <TextInput
-                style={styles.input}
-                placeholder="New Password"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-            />
-
-            <TextInput
-                style={styles.input}
-                placeholder="Confirm New Password"
-                secureTextEntry
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-            />
-
-            <TouchableOpacity
-                style={styles.button}
-                onPress={handleResetPassword}
-                disabled={loading}
+        <SafeAreaView style={styles.safeArea} edges={['bottom', 'left', 'right']}>
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={styles.flex}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                {loading ? (
-                    <ActivityIndicator color="#fff" />
-                ) : (
-                    <Text style={styles.buttonText}>Reset Password</Text>
-                )}
-            </TouchableOpacity>
-        </View>
+                <ScrollView
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <Text style={styles.title}>Reset Password</Text>
+                    <Text style={styles.subtitle}>
+                        Enter the 6-digit code sent to your email and choose a new password.
+                    </Text>
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Enter 6-digit Code"
+                        placeholderTextColor="#999"
+                        keyboardType="numeric"
+                        value={token}
+                        onChangeText={setToken}
+                        maxLength={6}
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="New Password"
+                        placeholderTextColor="#999"
+                        secureTextEntry
+                        value={password}
+                        onChangeText={setPassword}
+                    />
+
+                    <TextInput
+                        style={styles.input}
+                        placeholder="Confirm New Password"
+                        placeholderTextColor="#999"
+                        secureTextEntry
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                    />
+
+                    <TouchableOpacity
+                        style={styles.button}
+                        onPress={handleResetPassword}
+                        disabled={loading}
+                        activeOpacity={0.8}
+                    >
+                        {loading ? (
+                            <ActivityIndicator color="#fff" />
+                        ) : (
+                            <Text style={styles.buttonText}>Reset Password</Text>
+                        )}
+                    </TouchableOpacity>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 };
 
 export default ResetPasswordScreen;
 
 const styles = StyleSheet.create({
-    container: {
+    safeArea: {
         flex: 1,
-        padding: 20,
-        justifyContent: 'center',
         backgroundColor: '#fff',
     },
+    flex: {
+        flex: 1,
+    },
+    scrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        paddingHorizontal: scale(24),
+        paddingBottom: scale(30),
+    },
     title: {
-        fontSize: 24,
+        fontSize: scale(24),
         fontWeight: 'bold',
-        marginBottom: 30,
+        marginBottom: scale(8),
         textAlign: 'center',
         color: '#333',
     },
+    subtitle: {
+        fontSize: scale(14),
+        color: '#777',
+        textAlign: 'center',
+        marginBottom: scale(28),
+        lineHeight: scale(20),
+    },
     input: {
         borderWidth: 1,
-        borderColor: '#ccc',
-        paddingHorizontal: 15,
-        paddingVertical: 12,
-        borderRadius: 6,
-        marginBottom: 15,
-        fontSize: 16,
+        borderColor: '#ddd',
+        paddingHorizontal: scale(16),
+        paddingVertical: scale(14),
+        borderRadius: scale(10),
+        marginBottom: scale(16),
+        fontSize: scale(16),
+        backgroundColor: '#fafafa',
+        color: '#333',
     },
     button: {
         backgroundColor: '#581845',
-        paddingVertical: 15,
-        borderRadius: 6,
+        paddingVertical: scale(16),
+        borderRadius: scale(10),
         alignItems: 'center',
+        marginTop: scale(8),
     },
     buttonText: {
         color: '#fff',
-        fontSize: 16,
+        fontSize: scale(16),
+        fontWeight: '600',
     },
 });

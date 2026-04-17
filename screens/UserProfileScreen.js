@@ -28,11 +28,13 @@ import { sendConnectionRequest, cancelConnectionRequest, removeConnection, getCo
 import { socket } from '../socket';
 import { playPing, showTopToast } from '../utils/notify';
 import OnboardingOverlay from '../components/OnboardingOverlay';
+import { API_BASE_URL as BASE_URL } from '../config';
+import PhotoViewer from '../components/PhotoViewer';
 
 
 
 
-const BASE_URL = 'http://192.168.100.28:4000';
+// Using BASE_URL from config.js
 
 const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -73,6 +75,17 @@ const parseLanguages = (languages) => {
 
 const PlaceholderPhoto = 'https://via.placeholder.com/150';
 
+// Timezone-safe DOB display — always shows the stored date regardless of timezone
+const formatDobDisplay = (dobStr, withEmoji = false) => {
+  if (!dobStr) return null;
+  const dateOnly = String(dobStr).split('T')[0];
+  const [y, m, d] = dateOnly.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const formatted = withEmoji ? `${d} ${months[m - 1]} \u{1F389}` : `${months[m - 1]} ${d}, ${y}`;
+  return formatted;
+};
+
 const UserProfileScreen = () => {
     const navigation = useNavigation();
     const route = useRoute();
@@ -88,6 +101,8 @@ const UserProfileScreen = () => {
     const [showDisconnectModal, setShowDisconnectModal] = useState(false);
     const [disconnecting, setDisconnecting] = useState(false);
     const [connectionCount, setConnectionCount] = useState(0);
+    const [viewerVisible, setViewerVisible] = useState(false);
+    const [viewerIndex, setViewerIndex] = useState(0);
 const [reportModalVisible, setReportModalVisible] = useState(false);
 const [reportStep, setReportStep] = useState(1);
 const [selectedReason, setSelectedReason] = useState('');
@@ -225,18 +240,33 @@ const reportReasons = [
      useLayoutEffect(() => {
     navigation.setOptions({
       headerShown: true,
-      headerTransparent: false,     // Cleaner look
+      headerTransparent: false,
       headerTitle: '',
       headerBackTitle: 'Back',
       headerBackTitleVisible: true,
       headerStyle: {
-        backgroundColor: '#ffffff',   // Top bar background
+        backgroundColor: '#ffffff',
         borderBottomWidth: 0,
         elevation: 0,
         shadowOpacity: 0,
       },
-      headerTintColor: '#581845',     // Back icon color
+      headerTintColor: '#581845',
       headerShadowVisible: false,
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate('HomeTabs');
+            }
+          }}
+          style={{ paddingLeft: 8, paddingRight: 16, paddingVertical: 8 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="arrow-back" size={24} color="#581845" />
+        </TouchableOpacity>
+      ),
     });
   }, [navigation]);
 
@@ -680,6 +710,11 @@ const renderReportModal = () => (
     }
 
 
+    const openPhotoViewer = (index) => {
+        setViewerIndex(index);
+        setViewerVisible(true);
+    };
+
     return (
         <OnboardingOverlay screenName="UserProfile">
         <ScrollView style={styles.container}>
@@ -687,7 +722,12 @@ const renderReportModal = () => (
             {/* Profile Header */}
             <View style={styles.profileHeader}>
                 
-                <Image source={{ uri: avatar }} style={styles.profilePic} />
+                <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => { if (user?.photos?.length > 0) openPhotoViewer(0); }}
+                >
+                    <Image source={{ uri: avatar }} style={styles.profilePic} />
+                </TouchableOpacity>
                 <Text style={styles.fullName}>
                     {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown User'}
                 </Text>
@@ -755,11 +795,14 @@ const renderReportModal = () => (
                         horizontal
                         keyExtractor={(_, index) => String(index)}
                         renderItem={({ item, index }) => (
-                            <View style={{ alignItems: 'center', marginRight: 12 }}>
-                                <Image source={{ uri: item }} style={styles.galleryImage} />
-                                {index === 0 && <Text style={styles.profilePhotoLabel}>Profile Photo</Text>}
-                            </View>
-                        )}
+                        <TouchableOpacity
+                            onPress={() => openPhotoViewer(index)}
+                            style={{ alignItems: 'center', marginRight: 12 }}
+                        >
+                            <Image source={{ uri: item }} style={styles.galleryImage} />
+                            {index === 0 && <Text style={styles.profilePhotoLabel}>Profile Photo</Text>}
+                        </TouchableOpacity>
+                    )}
                     />
                 ) : (
                     <Text style={styles.placeholderText}>No photos uploaded yet.</Text>
@@ -777,9 +820,7 @@ const renderReportModal = () => (
   label="Date of Birth"
   value={
     user?.DOB
-      ? moment(user.DOB).format("DD MMM") + " 🎉"
-
-      // moment(user.DOB).format("DD MMMM")  // e.g. "12 March"
+      ? formatDobDisplay(user.DOB, true)
       : "N/A"
   }
 />
@@ -941,6 +982,13 @@ onPress={handleBlockUser }
                     </View>
                 </View>
             </Modal>
+
+            <PhotoViewer
+                visible={viewerVisible}
+                photos={user?.photos || []}
+                initialIndex={viewerIndex}
+                onClose={() => setViewerVisible(false)}
+            />
 
             
         </ScrollView>
@@ -1261,7 +1309,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.100.28:4000';
+// // Using BASE_URL from config.js
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
@@ -1936,7 +1984,7 @@ export default UserProfileScreen;
 
 
 
-// const BASE_URL = 'http://192.168.100.28:4000';
+// // Using BASE_URL from config.js
 
 // const toAbsolute = (p) => (p && typeof p === 'string' && !p.startsWith('http') ? `${BASE_URL}${p}` : p);
 
