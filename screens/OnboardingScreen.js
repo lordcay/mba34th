@@ -455,7 +455,7 @@
 
 
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Onboarding from 'react-native-onboarding-swiper';
 import {
   View,
@@ -465,14 +465,11 @@ import {
   ImageBackground,
   Dimensions,
   Platform,
-  ActivityIndicator,
 } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width, height } = Dimensions.get('window');
-const ONBOARDING_COMPLETE_KEY = '@onboarding_slides_complete';
 
 /* ------------ Tiny UI pieces ------------ */
 const Dots = ({ selected }) => (
@@ -504,34 +501,7 @@ const Done = (props) => <ButtonBase label="Done" {...props} />;
 /* ------------ Screen ------------ */
 const OnboardingScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const [isChecking, setIsChecking] = useState(true);
-
-  // Check if user has already completed onboarding
-  useEffect(() => {
-    const checkOnboardingStatus = async () => {
-      try {
-        const hasCompleted = await AsyncStorage.getItem(ONBOARDING_COMPLETE_KEY);
-        if (hasCompleted === 'true') {
-          // User already saw onboarding, go directly to Login
-          navigation.replace('Login');
-        } else {
-          // First time, show onboarding
-          setIsChecking(false);
-        }
-      } catch (error) {
-        console.log('Error checking onboarding status:', error);
-        setIsChecking(false);
-      }
-    };
-    checkOnboardingStatus();
-  }, [navigation]);
-
-  const handleComplete = async () => {
-    try {
-      await AsyncStorage.setItem(ONBOARDING_COMPLETE_KEY, 'true');
-    } catch (error) {
-      console.log('Error saving onboarding status:', error);
-    }
+  const handleComplete = () => {
     navigation.replace('Login');
   };
 
@@ -571,15 +541,6 @@ const OnboardingScreen = ({ navigation }) => {
         'This is your street. Your people. Your future circle. Tap in, let’s build greatness.',
     },
   ];
-
-  // Show loading while checking if user has seen onboarding
-  if (isChecking) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#581845" />
-      </View>
-    );
-  }
 
   return (
     <Onboarding
@@ -669,12 +630,6 @@ const styles = StyleSheet.create({
   barBtnText: {
     fontSize: 16,
     color: '#fff',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
   },
 });
 

@@ -290,22 +290,25 @@ export const OnboardingProvider = ({ children }) => {
     try {
       // Load local state first
       const savedState = await AsyncStorage.getItem(ONBOARDING_STORAGE_KEY);
+      const authToken = await AsyncStorage.getItem('token');
       let localCompleted = {};
       if (savedState) {
         const parsed = JSON.parse(savedState);
         localCompleted = parsed.completedSteps || {};
       }
 
-      // Try to merge with backend state
-      try {
-        const response = await api.get('/accounts/me/onboarding');
-        const backendScreens = response.data?.completedScreens || [];
-        backendScreens.forEach(screen => {
-          localCompleted[screen] = true;
-        });
-      } catch (err) {
-        // Backend unavailable - use local state only
-        console.log('Backend onboarding sync skipped:', err.message);
+      // Only merge with backend state for authenticated users.
+      if (authToken) {
+        try {
+          const response = await api.get('/accounts/me/onboarding');
+          const backendScreens = response.data?.completedScreens || [];
+          backendScreens.forEach(screen => {
+            localCompleted[screen] = true;
+          });
+        } catch (err) {
+          // Backend unavailable - use local state only
+          console.log('Backend onboarding sync skipped:', err.message);
+        }
       }
 
       if (Object.keys(localCompleted).length > 0) {
@@ -338,6 +341,11 @@ export const OnboardingProvider = ({ children }) => {
   // Sync onboarding completion with backend
   const syncWithBackend = async (newCompletedSteps) => {
     try {
+      const authToken = await AsyncStorage.getItem('token');
+      if (!authToken) {
+        return;
+      }
+
       await api.patch('/accounts/me/onboarding', {
         completedScreens: Object.keys(newCompletedSteps || completedSteps),
       });

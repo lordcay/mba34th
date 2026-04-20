@@ -54,7 +54,7 @@ const TabNavigator = () => {
   const totalUnread = state?.total || 0;
    const roomUnread  = Object.values(state?.roomById || {}).reduce((a, b) => a + b, 0);
 
-  const { unreadCount, userId } = useContext(AuthContext); // 🔴 Get unreadCount and userId
+  const { unreadCount, userId, token } = useContext(AuthContext); // 🔴 Get unreadCount, userId, and token for auth guard
 
     // Pick the most reliable number available at any moment
   const effectiveUnread = Math.max(Number(unreadCount || 0), Number(totalUnread || 0));
@@ -68,23 +68,33 @@ const TabNavigator = () => {
 
   // Fetch connection request count
   const fetchConnectionRequestCount = async () => {
+    // Skip if not authenticated to prevent 401 errors
+    if (!token) return;
     try {
       const data = await getPendingRequests();
       const count = data?.requests?.length || 0;
       setConnectionRequestCount(count);
     } catch (error) {
-      console.error('Failed to fetch connection request count:', error);
+      // Silently ignore auth errors - user might not be fully logged in yet
+      if (error?.response?.status !== 401) {
+        console.error('Failed to fetch connection request count:', error);
+      }
     }
   };
 
   // Fetch other notification count (mentions, comments, likes, etc.)
   const fetchNotificationCount = async () => {
+    // Skip if not authenticated to prevent 401 errors
+    if (!token) return;
     try {
       const data = await notificationService.getUnreadCount();
       const count = data?.unreadCount || 0;
       setOtherNotificationCount(count);
     } catch (error) {
-      console.error('Failed to fetch notification count:', error);
+      // Silently ignore auth errors - user might not be fully logged in yet
+      if (error?.response?.status !== 401) {
+        console.error('Failed to fetch notification count:', error);
+      }
     }
   };
 
