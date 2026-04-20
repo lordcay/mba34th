@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.8    ls ~/Desktop/34thstreet.xcarchive/Products/Applications/34thstreet.app/main.jsbundle    ls ~/Desktop/34thstreet.xcarchive/Products/Applications/34thstreet.app/main.jsbundle",
+    "version": "1.1.9",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -21,6 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coredevhub.34thstreet",
+      "buildNumber": "59",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSContactsUsageDescription": "We need access to your contacts to help you find and connect with friends on 34th Street.",
