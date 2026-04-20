@@ -60,22 +60,12 @@
     <string>We need access to your contacts to help you find and connect with friends on 34th Street.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Use Face ID to sign in to your 34th Street account quickly and securely.</string>
-    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
-    <key>NSLocationAlwaysUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow 34thstreet to access your microphone for voice and video calls.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>We may save edited photos to your library.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow 34thstreet to access your photos so you can upload a profile picture.</string>
-    <key>NSRemindersFullAccessUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your reminders</string>
-    <key>NSRemindersUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your reminders</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIAppFonts</key>

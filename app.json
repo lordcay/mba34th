@@ -22,6 +22,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.coredevhub.34thstreet",
       "buildNumber": "60",
+      "appleTeamId": "HMUJY5KA29",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSContactsUsageDescription": "We need access to your contacts to help you find and connect with friends on 34th Street.",

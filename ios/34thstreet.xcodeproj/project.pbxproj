@@ -7,35 +7,35 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0D0F0DAFC1E5BA96E52166DE /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 489F10113FA225F09DED2B47 /* PrivacyInfo.xcprivacy */; };
 		13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 13B07FB51A68108700A75B9A /* Images.xcassets */; };
-		214BD1369B074DA5A1286646 /* Poppins_700Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5DCCCF10AEAF4A97805835C6 /* Poppins_700Bold.ttf */; };
-		3415D7A2212AA06989D54A43 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 297C13DF4403C6F429A1F3A8 /* ExpoModulesProvider.swift */; };
+		3539D45B81024D4682D50D00 /* incoming.wav in Resources */ = {isa = PBXBuildFile; fileRef = 7A8DB083A68E4259A09230C2 /* incoming.wav */; };
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
-		59C07FF1F16B42AA8A24555C /* Poppins_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2C7E7759DCB44C5B90EE9C11 /* Poppins_400Regular.ttf */; };
-		81C338DECA04BE068650709B /* libPods-34thstreet.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 6BDA5B04E91B6177B049BF8F /* libPods-34thstreet.a */; };
-		8604CAEF23FC4D71BB814286 /* incoming.wav in Resources */ = {isa = PBXBuildFile; fileRef = 311DC169F3A442D8AE11529D /* incoming.wav */; };
-		984A078A02005BD401D1A829 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 8356CA084537ADD66C0E2624 /* PrivacyInfo.xcprivacy */; };
+		69D70F3FC191228EE2B04E5D /* libPods-34thstreet.a in Frameworks */ = {isa = PBXBuildFile; fileRef = E9527686255A4642A01DFA8A /* libPods-34thstreet.a */; };
+		83D9B553111F4A65B4655B34 /* Poppins_700Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 575E9294386F413A8B2FC603 /* Poppins_700Bold.ttf */; };
+		9DE445741DCC567100732B13 /* ExpoModulesProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7342034064082EC9103D413 /* ExpoModulesProvider.swift */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		F712261322884B85AA524B8E /* Poppins_400Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F43BCEC1D61846CA9EBEB9FD /* Poppins_400Regular.ttf */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		023F517D450131CDAC0A1609 /* Pods-34thstreet.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-34thstreet.release.xcconfig"; path = "Target Support Files/Pods-34thstreet/Pods-34thstreet.release.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* 34thstreet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = 34thstreet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = 34thstreet/Images.xcassets; sourceTree = "<group>"; };
 		13B07FB61A68108700A75B9A /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = Info.plist; path = 34thstreet/Info.plist; sourceTree = "<group>"; };
-		297C13DF4403C6F429A1F3A8 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-34thstreet/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
-		2C7E7759DCB44C5B90EE9C11 /* Poppins_400Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Poppins_400Regular.ttf; path = ../assets/fonts/Poppins_400Regular.ttf; sourceTree = "<group>"; };
-		311DC169F3A442D8AE11529D /* incoming.wav */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = incoming.wav; path = 34thstreet/incoming.wav; sourceTree = "<group>"; };
-		5DCCCF10AEAF4A97805835C6 /* Poppins_700Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = Poppins_700Bold.ttf; path = ../assets/fonts/Poppins_700Bold.ttf; sourceTree = "<group>"; };
-		5E0504B9F10875904C1B2410 /* Pods-34thstreet.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-34thstreet.release.xcconfig"; path = "Target Support Files/Pods-34thstreet/Pods-34thstreet.release.xcconfig"; sourceTree = "<group>"; };
-		6BDA5B04E91B6177B049BF8F /* libPods-34thstreet.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-34thstreet.a"; sourceTree = BUILT_PRODUCTS_DIR; };
-		8356CA084537ADD66C0E2624 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = 34thstreet/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		86A0E5F1DA79ECDF28B35B3F /* Pods-34thstreet.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-34thstreet.debug.xcconfig"; path = "Target Support Files/Pods-34thstreet/Pods-34thstreet.debug.xcconfig"; sourceTree = "<group>"; };
+		489F10113FA225F09DED2B47 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = 34thstreet/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		4AE9ED030424D62B10C5CF60 /* Pods-34thstreet.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-34thstreet.debug.xcconfig"; path = "Target Support Files/Pods-34thstreet/Pods-34thstreet.debug.xcconfig"; sourceTree = "<group>"; };
+		575E9294386F413A8B2FC603 /* Poppins_700Bold.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Poppins_700Bold.ttf; path = ../assets/fonts/Poppins_700Bold.ttf; sourceTree = "<group>"; };
+		7A8DB083A68E4259A09230C2 /* incoming.wav */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = incoming.wav; path = 34thstreet/incoming.wav; sourceTree = "<group>"; };
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = 34thstreet/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		E7342034064082EC9103D413 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-34thstreet/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
+		E9527686255A4642A01DFA8A /* libPods-34thstreet.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-34thstreet.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = 34thstreet/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* 34thstreet-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "34thstreet-Bridging-Header.h"; path = "34thstreet/34thstreet-Bridging-Header.h"; sourceTree = "<group>"; };
+		F43BCEC1D61846CA9EBEB9FD /* Poppins_400Regular.ttf */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = 9; includeInIndex = 0; lastKnownFileType = unknown; name = Poppins_400Regular.ttf; path = ../assets/fonts/Poppins_400Regular.ttf; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,13 +43,22 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				81C338DECA04BE068650709B /* libPods-34thstreet.a in Frameworks */,
+				69D70F3FC191228EE2B04E5D /* libPods-34thstreet.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0B1B824A9D4D4306980B0A5A /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				F43BCEC1D61846CA9EBEB9FD /* Poppins_400Regular.ttf */,
+				575E9294386F413A8B2FC603 /* Poppins_700Bold.ttf */,
+			);
+			name = Resources;
+			sourceTree = "<group>";
+		};
 		13B07FAE1A68108700A75B9A /* 34thstreet */ = {
 			isa = PBXGroup;
 			children = (
@@ -59,8 +68,8 @@
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
-				311DC169F3A442D8AE11529D /* incoming.wav */,
-				8356CA084537ADD66C0E2624 /* PrivacyInfo.xcprivacy */,
+				7A8DB083A68E4259A09230C2 /* incoming.wav */,
+				489F10113FA225F09DED2B47 /* PrivacyInfo.xcprivacy */,
 			);
 			name = 34thstreet;
 			sourceTree = "<group>";
@@ -69,35 +78,15 @@
 			isa = PBXGroup;
 			children = (
 				ED297162215061F000B7C4FE /* JavaScriptCore.framework */,
-				6BDA5B04E91B6177B049BF8F /* libPods-34thstreet.a */,
+				E9527686255A4642A01DFA8A /* libPods-34thstreet.a */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		36BC7839703FCFE6F0513745 /* Pods */ = {
+		709BAA0ED5AD064B7213FD6A /* ExpoModulesProviders */ = {
 			isa = PBXGroup;
 			children = (
-				86A0E5F1DA79ECDF28B35B3F /* Pods-34thstreet.debug.xcconfig */,
-				5E0504B9F10875904C1B2410 /* Pods-34thstreet.release.xcconfig */,
-			);
-			name = Pods;
-			path = Pods;
-			sourceTree = "<group>";
-		};
-		68C6D6EB97014D178296DCFA /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-				2C7E7759DCB44C5B90EE9C11 /* Poppins_400Regular.ttf */,
-				5DCCCF10AEAF4A97805835C6 /* Poppins_700Bold.ttf */,
-			);
-			name = Resources;
-			path = "";
-			sourceTree = "<group>";
-		};
-		6EB3C747657952182AAAB5DD /* ExpoModulesProviders */ = {
-			isa = PBXGroup;
-			children = (
-				C292E3208FF19BCD26D14D00 /* 34thstreet */,
+				97259E0F86BF6EF91FF2FF65 /* 34thstreet */,
 			);
 			name = ExpoModulesProviders;
 			sourceTree = "<group>";
@@ -116,9 +105,9 @@
 				832341AE1AAA6A7D00B99B32 /* Libraries */,
 				83CBBA001A601CBA00E9B192 /* Products */,
 				2D16E6871FA4F8E400B85C8A /* Frameworks */,
-				68C6D6EB97014D178296DCFA /* Resources */,
-				36BC7839703FCFE6F0513745 /* Pods */,
-				6EB3C747657952182AAAB5DD /* ExpoModulesProviders */,
+				0B1B824A9D4D4306980B0A5A /* Resources */,
+				A48A802D288369C97CE91E1E /* Pods */,
+				709BAA0ED5AD064B7213FD6A /* ExpoModulesProviders */,
 			);
 			indentWidth = 2;
 			sourceTree = "<group>";
@@ -133,6 +122,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		97259E0F86BF6EF91FF2FF65 /* 34thstreet */ = {
+			isa = PBXGroup;
+			children = (
+				E7342034064082EC9103D413 /* ExpoModulesProvider.swift */,
+			);
+			name = 34thstreet;
+			sourceTree = "<group>";
+		};
+		A48A802D288369C97CE91E1E /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				4AE9ED030424D62B10C5CF60 /* Pods-34thstreet.debug.xcconfig */,
+				023F517D450131CDAC0A1609 /* Pods-34thstreet.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		BB2F792B24A3F905000567C9 /* Supporting */ = {
 			isa = PBXGroup;
 			children = (
@@ -140,14 +146,6 @@
 			);
 			name = Supporting;
 			path = 34thstreet/Supporting;
-			sourceTree = "<group>";
-		};
-		C292E3208FF19BCD26D14D00 /* 34thstreet */ = {
-			isa = PBXGroup;
-			children = (
-				297C13DF4403C6F429A1F3A8 /* ExpoModulesProvider.swift */,
-			);
-			name = 34thstreet;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -158,13 +156,13 @@
 			buildConfigurationList = 13B07F931A680F5B00A75B9A /* Build configuration list for PBXNativeTarget "34thstreet" */;
 			buildPhases = (
 				08A4A3CD28434E44B6B9DE2E /* [CP] Check Pods Manifest.lock */,
-				359D22E081C9558D103AA198 /* [Expo] Configure project */,
+				A31DF8DEA2D0CCAC5BB291E0 /* [Expo] Configure project */,
 				13B07F871A680F5B00A75B9A /* Sources */,
 				13B07F8C1A680F5B00A75B9A /* Frameworks */,
 				13B07F8E1A680F5B00A75B9A /* Resources */,
 				00DD1BFF1BD5951E006B06BC /* Bundle React Native code and images */,
 				800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */,
-				C086E7D0381036C285B8478E /* [CP] Embed Pods Frameworks */,
+				D059060C8D68758551C15D72 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -214,10 +212,10 @@
 				BB2F792D24A3F905000567C9 /* Expo.plist in Resources */,
 				13B07FBF1A68108700A75B9A /* Images.xcassets in Resources */,
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
-				8604CAEF23FC4D71BB814286 /* incoming.wav in Resources */,
-				59C07FF1F16B42AA8A24555C /* Poppins_400Regular.ttf in Resources */,
-				214BD1369B074DA5A1286646 /* Poppins_700Bold.ttf in Resources */,
-				984A078A02005BD401D1A829 /* PrivacyInfo.xcprivacy in Resources */,
+				3539D45B81024D4682D50D00 /* incoming.wav in Resources */,
+				F712261322884B85AA524B8E /* Poppins_400Regular.ttf in Resources */,
+				83D9B553111F4A65B4655B34 /* Poppins_700Bold.ttf in Resources */,
+				0D0F0DAFC1E5BA96E52166DE /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,30 +261,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		359D22E081C9558D103AA198 /* [Expo] Configure project */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-				"$(SRCROOT)/.xcode.env",
-				"$(SRCROOT)/.xcode.env.local",
-				"$(SRCROOT)/34thstreet/34thstreet.entitlements",
-				"$(SRCROOT)/Pods/Target Support Files/Pods-34thstreet/expo-configure-project.sh",
-			);
-			name = "[Expo] Configure project";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-				"$(SRCROOT)/Pods/Target Support Files/Pods-34thstreet/ExpoModulesProvider.swift",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-34thstreet/expo-configure-project.sh\"\n";
-		};
 		800E24972A6A228C8D4807E9 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -331,7 +305,31 @@
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-34thstreet/Pods-34thstreet-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
-		C086E7D0381036C285B8478E /* [CP] Embed Pods Frameworks */ = {
+		A31DF8DEA2D0CCAC5BB291E0 /* [Expo] Configure project */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/.xcode.env",
+				"$(SRCROOT)/.xcode.env.local",
+				"$(SRCROOT)/34thstreet/34thstreet.entitlements",
+				"$(SRCROOT)/Pods/Target Support Files/Pods-34thstreet/expo-configure-project.sh",
+			);
+			name = "[Expo] Configure project";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Pods/Target Support Files/Pods-34thstreet/ExpoModulesProvider.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# This script configures Expo modules and generates the modules provider file.\nbash -l -c \"./Pods/Target\\ Support\\ Files/Pods-34thstreet/expo-configure-project.sh\"\n";
+		};
+		D059060C8D68758551C15D72 /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -363,7 +361,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
-				3415D7A2212AA06989D54A43 /* ExpoModulesProvider.swift in Sources */,
+				9DE445741DCC567100732B13 /* ExpoModulesProvider.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -372,12 +370,13 @@
 /* Begin XCBuildConfiguration section */
 		13B07F941A680F5B00A75B9A /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 86A0E5F1DA79ECDF28B35B3F /* Pods-34thstreet.debug.xcconfig */;
+			baseConfigurationReference = 4AE9ED030424D62B10C5CF60 /* Pods-34thstreet.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = 34thstreet/34thstreet.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HMUJY5KA29;
 				ENABLE_BITCODE = NO;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(inherited)",
@@ -408,12 +407,13 @@
 		};
 		13B07F951A680F5B00A75B9A /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5E0504B9F10875904C1B2410 /* Pods-34thstreet.release.xcconfig */;
+			baseConfigurationReference = 023F517D450131CDAC0A1609 /* Pods-34thstreet.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = 34thstreet/34thstreet.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HMUJY5KA29;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = 34thstreet/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.1;
