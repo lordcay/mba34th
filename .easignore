@@ -1,0 +1,7 @@
+node_modules/
+.git/
+ios/
+android/
+backend-updates/
+.expo/
+*.backup

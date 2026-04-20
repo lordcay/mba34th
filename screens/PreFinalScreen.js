@@ -6,7 +6,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import LottieView from 'lottie-react-native';
 import axios from 'axios';
-import jwtDecode from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import { AuthContext } from '../context/AuthContext';
 import { getRegistrationProgress } from '../registrationUtils';
 // import CheckBox from '@react-native-community/checkbox'; // run: expo install @react-native-community/checkbox

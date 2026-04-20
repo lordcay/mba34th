@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.8",
+    "version": "1.1.8    ls ~/Desktop/34thstreet.xcarchive/Products/Applications/34thstreet.app/main.jsbundle    ls ~/Desktop/34thstreet.xcarchive/Products/Applications/34thstreet.app/main.jsbundle",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -68,7 +68,12 @@
       "favicon": "./assets/logo1.png"
     },
     "plugins": [
-      "expo-font",
+      ["expo-font", {
+        "fonts": [
+          "./assets/fonts/Poppins_400Regular.ttf",
+          "./assets/fonts/Poppins_700Bold.ttf"
+        ]
+      }],
       "expo-splash-screen",
       [
         "expo-notifications",

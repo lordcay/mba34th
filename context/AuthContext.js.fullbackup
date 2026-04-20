@@ -331,7 +331,15 @@ const AuthProvider = ({ children }) => {
         authError,
       }}
     >
-      {children}
+      {authError ? (
+        <div style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 32 }}>
+          <p style={{ fontSize: 24, color: 'red', marginBottom: 16 }}>Auth Error</p>
+          <p style={{ fontSize: 16, color: '#333', textAlign: 'center' }}>{authError}</p>
+          <p style={{ fontSize: 14, color: '#666', marginTop: 16 }}>Check your network, API, or AsyncStorage permissions.</p>
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 };

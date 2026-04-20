@@ -78,9 +78,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
-import axios from 'axios';
 
-import { API_BASE_URL } from './config';
 import AppNavigator from './navigation/AppNavigator';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import { socket } from './socket';
@@ -547,20 +545,18 @@ useEffect(() => {
   return children;
 };
 
+
+import { API_BASE_URL } from './config';
+import axios from 'axios';
+
 export default function App() {
   const [appReady, setAppReady] = useState(false);
+  const [apiError, setApiError] = useState(null);
 
   useEffect(() => {
-    // Safety net: force hide splash after 8 seconds no matter what
-    const safetyTimer = setTimeout(() => {
-      SplashScreen.hideAsync().catch(() => {});
-      setAppReady(true);
-      console.warn('[App] Safety timeout triggered - forcing app ready');
-    }, 8000);
-
     async function prepare() {
+      console.log('[App] prepare() started');
       try {
-        console.log('[App] prepare() started');
         await Promise.race([
           Font.loadAsync({
             'Poppins_400Regular': require('./assets/fonts/Poppins_400Regular.ttf'),
@@ -569,24 +565,40 @@ export default function App() {
           new Promise((resolve) => setTimeout(resolve, 5000)),
         ]);
         console.log('[App] Fonts loaded or timeout');
+        // Test API connectivity at startup
+        try {
+          console.log('[App] Testing API connectivity:', API_BASE_URL);
+          const res = await axios.get(API_BASE_URL + '/health');
+          console.log('[App] API health check success:', res.status);
+        } catch (err) {
+          setApiError('API unreachable: ' + (err?.message || 'Unknown error'));
+          console.error('[App] API health check failed:', err);
+        }
       } catch (e) {
-        console.warn('[App] Font loading failed, continuing anyway:', e);
+        console.warn('Font loading failed, continuing anyway:', e);
       } finally {
-        clearTimeout(safetyTimer);
         setAppReady(true);
         console.log('[App] App ready, hiding splash');
         SplashScreen.hideAsync().catch(() => {});
       }
     }
     prepare();
-
-    return () => clearTimeout(safetyTimer);
   }, []);
 
   if (!appReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 16, color: '#581845' }}>Loading...</Text>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', padding: 32 }}>
+        <Text style={{ fontSize: 24, color: 'red', marginBottom: 16 }}>API Error</Text>
+        <Text style={{ fontSize: 16, color: '#333', textAlign: 'center' }}>{apiError}</Text>
+        <Text style={{ fontSize: 14, color: '#666', marginTop: 16 }}>Check your internet connection or API_BASE_URL in config.js</Text>
       </View>
     );
   }
@@ -607,4 +619,16 @@ export default function App() {
       </UnreadProvider>
     </ErrorBoundary>
   );
+
+
+  // return (
+  //   <AuthProvider>
+  //     <UnreadProvider>
+  //     <WithSocketListener>
+  //       <AppNavigator />
+  //       <Toast />
+  //     </WithSocketListener>
+  //     </UnreadProvider>
+  //   </AuthProvider>
+  // );
 }
