@@ -19,6 +19,7 @@ import {
   Pressable,
   Modal as RNModal,
 } from 'react-native';
+import { StatusBar as ExpoStatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AuthContext } from '../context/AuthContext';
@@ -1158,7 +1159,8 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         onRequestClose={() => setViewerVisible(false)}
       >
         <View style={viewerStyles.overlay}>
-          <StatusBar barStyle="light-content" />
+          {/* expo-status-bar auto-resets to the global dark default when this modal unmounts */}
+          <ExpoStatusBar style="light" translucent />
 
           {/* Top bar */}
           <View style={[viewerStyles.topBar, { paddingTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 10 }]}>

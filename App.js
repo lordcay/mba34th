@@ -88,7 +88,7 @@ import { showTopToast, playPing } from './utils/notify';
 import { UnreadProvider } from './context/UnreadContext';
 import { navigate } from './navigation/RootNavigation';
 import { useUnread } from './context/UnreadContext';
-import { setupPushNotifications, subscribeToPushTokenRefresh } from './hooks/usePushNotifications';
+import { setupPushNotifications, subscribeToPushTokenRefresh, setupNotificationCategories } from './hooks/usePushNotifications';
 import { CallProvider } from './context/CallContext';
 import { OnboardingProvider } from './context/OnboardingContext';
 
@@ -137,8 +137,23 @@ const ebStyles = RNStyleSheet.create({
 function openFromPushData(data) {
   if (!data) return;
 
+  // ── Incoming call push (backend Expo push or local notification from CallContext) ──
+  // Tapping a call notification opens the CallScreen as the callee.
+  if (data.kind === 'call' && data.callerId) {
+    navigate('Call', {
+      isIncoming:           true,
+      callType:             data.callType     || 'audio',
+      callerId:             data.callerId,
+      callerName:           data.callerName   || 'Unknown',
+      callerPhoto:          data.callerPhoto  || null,
+      isConference:         data.isConference || false,
+      conferenceId:         data.conferenceId || null,
+      existingParticipants: data.existingParticipants || [],
+    });
+    return;
+  }
+
   if (data.kind === 'dm' && data.otherUserId) {
-    // Minimal route params (you can fetch full user later)
     navigate('PrivateChat', { user: { id: data.otherUserId, firstName: data.senderName } });
     return;
   }
@@ -148,7 +163,6 @@ function openFromPushData(data) {
     return;
   }
 
-  // Handle mention notifications - navigate to the post
   if (data.type === 'mention' && data.postId) {
     navigate('PostDetail', { postId: data.postId });
     return;
@@ -208,6 +222,11 @@ const WithSocketListener = ({ children }) => {
   const appState = useRef(AppState.currentState);
   const [ready, setReady] = useState(false);
   const { dispatch } = useUnread();
+
+  // Ref so notification-response handlers (registered once on mount) always see
+  // the current userId without needing to re-register the listener.
+  const userIdRef = useRef(userId);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
 
 
   // keep an Audio.Sound preloaded (optional; playPing in utils already works too)
@@ -278,14 +297,18 @@ const WithSocketListener = ({ children }) => {
     };
   }, [userId]);
 
-  // ✅ Register push token with backend when user logs in
+  // ✅ Register push token + notification categories when user logs in
   useEffect(() => {
     if (!userId) return;
-    
-    // Register device and save token to backend
+
+    // Register device token and save to backend
     setupPushNotifications().catch((err) => {
       console.log('Push notification setup error:', err);
     });
+
+    // iOS: register "Accept" / "Decline" action buttons for incoming call notifications.
+    // Safe to call on Android too (no-op for categories).
+    setupNotificationCategories().catch(() => {});
 
     // Subscribe to token rotation — update backend if token changes (reinstall, OS reset)
     const tokenRefreshSub = subscribeToPushTokenRefresh();
@@ -509,10 +532,31 @@ const onGroupNew = (msg) => {
       showTopToast(toastTitle, toastBody);
     });
 
-    // B) User taps notification while app is open OR backgrounded (suspended)
+    // B) User interacts with a notification (tap, or taps an action button like Accept/Decline)
     const subResponse = Notifications.addNotificationResponseReceivedListener((response) => {
       try {
-        const data = response?.notification?.request?.content?.data || {};
+        const data     = response?.notification?.request?.content?.data || {};
+        const actionId = response.actionIdentifier; // e.g. 'decline_call', 'accept_call', or DEFAULT
+
+        if (data.kind === 'call') {
+          if (actionId === 'decline_call') {
+            // User pressed "Decline" from the lock-screen / banner — reject without opening app.
+            socket.emit('call:reject', {
+              callerId: data.callerId,
+              calleeId: userIdRef.current,
+              reason:   'Call declined',
+            });
+            // Dismiss the notification immediately so it doesn't linger
+            Notifications.dismissNotificationAsync(
+              response.notification.request.identifier
+            ).catch(() => {});
+          } else {
+            // Default tap or "Accept" button → bring app to foreground and open CallScreen
+            openFromPushData(data);
+          }
+          return;
+        }
+
         openFromPushData(data);
       } catch {}
     });

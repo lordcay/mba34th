@@ -8,7 +8,6 @@ import {
   Dimensions,
   Platform,
   Alert,
-  StatusBar,
   Animated,
   Vibration,
   FlatList,
@@ -18,6 +17,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -41,31 +41,35 @@ try {
   console.log('WebRTC not available (Expo Go)');
 }
 
-// Enhanced ICE configuration with STUN + TURN for reliable NAT traversal
+// ICE configuration — TURN listed first so restricted networks (symmetric NAT) get relay
+// immediately instead of wasting time on STUN candidates that will fail.
+// sdpSemantics: unified-plan is required by modern WebRTC and react-native-webrtc.
+// bundlePolicy: max-bundle forces all media onto one 5-tuple → lower overhead.
+// iceCandidatePoolSize: pre-gather 10 candidates so the offer is ready faster.
 const ICE_SERVERS = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
-    // TURN servers for NAT traversal reliability
     {
-      urls: 'turn:openrelay.metered.ca:80',
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:80?transport=tcp',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+      ],
       username: 'openrelayproject',
       credential: 'openrelayproject',
     },
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: [
+        'stun:stun.l.google.com:19302',
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+      ],
     },
   ],
+  sdpSemantics: 'unified-plan',
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
+  iceCandidatePoolSize: 10,
 };
 
 const CALL_TIMEOUT = 45000; // 45 seconds ring timeout
@@ -131,6 +135,7 @@ const CallScreen = ({ route, navigation }) => {
   const [showAddPeople, setShowAddPeople] = useState(false);
   const [myConnections, setMyConnections] = useState([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsFetchError, setConnectionsFetchError] = useState(false);
   const [connectionSearch, setConnectionSearch] = useState('');
 
   // Refs
@@ -145,6 +150,20 @@ const CallScreen = ({ route, navigation }) => {
   const callTimeoutRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
   const hasNavigatedRef = useRef(false);
+
+  // ICE candidate queue: buffer remote candidates that arrive before setRemoteDescription.
+  // Without this, candidates dropped during signaling cause connection failures on slow links.
+  const iceCandidateQueueRef = useRef([]);
+  const remoteDescriptionSetRef = useRef(false);
+
+  // Per-participant ICE queues for conference mode
+  const confIceCandidateQueuesRef = useRef(new Map()); // Map<userId, RTCIceCandidate[]>
+  const confRemoteDescSetRef = useRef(new Set());       // tracks which conf peers have remote desc
+
+  // Invite timeout timers — auto-remove "calling" badge if invitee doesn't respond in 30s
+  const inviteTimersRef = useRef(new Map()); // Map<userId, TimeoutID>
+  // Cache flag so we don't re-fetch connections every time the modal opens
+  const connectionsFetchedRef = useRef(false);
 
   // Animation refs
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -402,34 +421,34 @@ const CallScreen = ({ route, navigation }) => {
   const setupCall = async () => {
     try {
       const stream = await mediaDevices.getUserMedia({
-        audio: true,
+        // Explicit audio constraints enable hardware EC/NS/AGC — critical for voice clarity
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
         video: callType === 'video' ? {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 },
+          width: { ideal: 1280, max: 1920 },
+          height: { ideal: 720, max: 1080 },
+          frameRate: { ideal: 30, max: 60 },
         } : false,
       });
 
       setLocalStream(stream);
-      localStreamRef.current = stream; // always-current ref for conference track sharing
+      localStreamRef.current = stream;
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
 
-      // Add local tracks
-      stream.getTracks().forEach(track => {
-        pc.addTrack(track, stream);
-      });
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-      // Handle remote stream
       pc.ontrack = (event) => {
         if (event.streams && event.streams[0]) {
           setRemoteStream(event.streams[0]);
         }
       };
 
-      // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
           socket.emit('call:ice-candidate', {
@@ -439,26 +458,42 @@ const CallScreen = ({ route, navigation }) => {
         }
       };
 
-      // Enhanced connection state monitoring
-      pc.onconnectionstatechange = () => {
-        console.log('Connection state:', pc.connectionState);
-        switch (pc.connectionState) {
+      // ICE state is more granular than connection state — use it as primary signal.
+      // 'disconnected' is transient (normal on mobile network handoffs); wait 4s then restart.
+      // 'failed' means ICE gave up completely — attempt restart immediately.
+      pc.oniceconnectionstatechange = () => {
+        console.log('ICE state:', pc.iceConnectionState);
+        switch (pc.iceConnectionState) {
+          case 'checking':
+            setCallState('connecting');
+            break;
           case 'connected':
+          case 'completed':
             setCallState('connected');
             stopRingtone();
-            if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
             break;
           case 'disconnected':
-            // Brief disconnection — try to wait for reconnect
             setCallState('reconnecting');
-            reconnectTimeoutRef.current = setTimeout(() => {
-              if (pc.connectionState !== 'connected') {
-                handleCallEnded({ reason: 'Connection lost' });
-              }
-            }, RECONNECT_TIMEOUT);
+            // Give the browser 4s to self-heal before forcing an ICE restart
+            if (!reconnectTimeoutRef.current) {
+              reconnectTimeoutRef.current = setTimeout(() => {
+                reconnectTimeoutRef.current = null;
+                if (peerConnectionRef.current?.iceConnectionState !== 'connected' &&
+                    peerConnectionRef.current?.iceConnectionState !== 'completed') {
+                  tryIceRestart(peerConnectionRef.current);
+                }
+              }, 4000);
+            }
             break;
           case 'failed':
-            // Try ICE restart before giving up
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current);
+              reconnectTimeoutRef.current = null;
+            }
             tryIceRestart(pc);
             break;
           case 'closed':
@@ -467,15 +502,19 @@ const CallScreen = ({ route, navigation }) => {
         }
       };
 
-      // Monitor ICE connection state
-      pc.oniceconnectionstatechange = () => {
-        console.log('ICE connection state:', pc.iceConnectionState);
-        if (pc.iceConnectionState === 'checking') {
-          setCallState('connecting');
+      // Connection state confirms DTLS/SRTP is up — use it only for final 'connected' confirmation
+      pc.onconnectionstatechange = () => {
+        console.log('Connection state:', pc.connectionState);
+        if (pc.connectionState === 'connected') {
+          setCallState('connected');
+          stopRingtone();
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+          }
         }
       };
 
-      // Start or wait for call
       if (isInitiator) {
         initiateCall();
         playRingtone('outgoing');
@@ -489,19 +528,48 @@ const CallScreen = ({ route, navigation }) => {
     }
   };
 
+  // Flush ICE candidates that arrived before setRemoteDescription was called.
+  // Must be called right after every successful setRemoteDescription.
+  const flushIceCandidates = async (pc) => {
+    const queue = iceCandidateQueueRef.current;
+    iceCandidateQueueRef.current = [];
+    for (const candidate of queue) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn('Queued ICE candidate error:', err);
+      }
+    }
+  };
+
   const tryIceRestart = async (pc) => {
     try {
+      // Only the call initiator sends the restart offer to avoid glare
+      if (!isInitiator) return;
+      if (!pc || pc.signalingState === 'closed') return;
+
       console.log('Attempting ICE restart...');
       setCallState('reconnecting');
+
+      // Stable state required before creating a new offer
+      if (pc.signalingState !== 'stable') {
+        console.warn('ICE restart skipped — not in stable state:', pc.signalingState);
+        return;
+      }
+
+      // Reset ICE queue so stale candidates from the old path are discarded
+      iceCandidateQueueRef.current = [];
+      remoteDescriptionSetRef.current = false;
+
       const offer = await pc.createOffer({ iceRestart: true });
       await pc.setLocalDescription(offer);
-      socket.emit('call:offer', {
-        calleeId: remoteUserId,
-        offer,
-      });
+
+      socket.emit('call:offer', { calleeId: remoteUserId, offer });
 
       reconnectTimeoutRef.current = setTimeout(() => {
-        if (pc.connectionState !== 'connected') {
+        reconnectTimeoutRef.current = null;
+        if (peerConnectionRef.current?.iceConnectionState !== 'connected' &&
+            peerConnectionRef.current?.iceConnectionState !== 'completed') {
           handleCallEnded({ reason: 'Could not reconnect' });
         }
       }, RECONNECT_TIMEOUT);
@@ -534,13 +602,23 @@ const CallScreen = ({ route, navigation }) => {
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
-      const offer = await pc.createOffer();
+      // Guard: must be in stable state before creating an offer
+      if (pc.signalingState !== 'stable') {
+        console.warn('Offer skipped — not stable:', pc.signalingState);
+        return;
+      }
+
+      // Reset queue so candidates from a previous attempt are discarded
+      iceCandidateQueueRef.current = [];
+      remoteDescriptionSetRef.current = false;
+
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: callType === 'video',
+      });
       await pc.setLocalDescription(offer);
 
-      socket.emit('call:offer', {
-        calleeId,
-        offer,
-      });
+      socket.emit('call:offer', { calleeId, offer });
     } catch (error) {
       console.error('Error creating offer:', error);
     }
@@ -551,15 +629,24 @@ const CallScreen = ({ route, navigation }) => {
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
+      // Offer collision: if we're not stable the remote sent an offer while we were negotiating.
+      // As the non-initiator (polite peer) we always accept the remote offer.
+      if (pc.signalingState !== 'stable') {
+        console.warn('Offer received in non-stable state — rolling back:', pc.signalingState);
+        await pc.setLocalDescription({ type: 'rollback' });
+      }
+
+      remoteDescriptionSetRef.current = false;
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      remoteDescriptionSetRef.current = true;
+
+      // Flush any ICE candidates that arrived before the remote description
+      await flushIceCandidates(pc);
 
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      socket.emit('call:answer', {
-        callerId: remoteUserId,
-        answer,
-      });
+      socket.emit('call:answer', { callerId: remoteUserId, answer });
     } catch (error) {
       console.error('Error handling offer:', error);
     }
@@ -570,7 +657,17 @@ const CallScreen = ({ route, navigation }) => {
       const pc = peerConnectionRef.current;
       if (!pc) return;
 
+      // Ignore if we're already stable (duplicate answer)
+      if (pc.signalingState === 'stable') {
+        console.warn('Answer ignored — already stable');
+        return;
+      }
+
       await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      remoteDescriptionSetRef.current = true;
+
+      // Flush candidates queued while waiting for the answer
+      await flushIceCandidates(pc);
     } catch (error) {
       console.error('Error handling answer:', error);
     }
@@ -579,9 +676,16 @@ const CallScreen = ({ route, navigation }) => {
   const handleIceCandidate = async ({ candidate }) => {
     try {
       const pc = peerConnectionRef.current;
-      if (pc && candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      if (!pc || !candidate) return;
+
+      // Buffer candidates until the remote description is set — adding them before
+      // setRemoteDescription silently fails and the connection never completes on bad networks.
+      if (!remoteDescriptionSetRef.current) {
+        iceCandidateQueueRef.current.push(candidate);
+        return;
       }
+
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (error) {
       console.error('Error adding ICE candidate:', error);
     }
@@ -749,7 +853,7 @@ const CallScreen = ({ route, navigation }) => {
   const createConferencePeerConnection = useCallback(async (participantId, asInitiator) => {
     if (!RTCPeerConnection) return null;
 
-    // Reuse if already exists
+    // Reuse existing connection if still healthy
     if (confPeerConnectionsRef.current.has(participantId)) {
       return confPeerConnectionsRef.current.get(participantId);
     }
@@ -757,23 +861,24 @@ const CallScreen = ({ route, navigation }) => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
     confPeerConnectionsRef.current.set(participantId, pc);
 
-    // Share local tracks with this participant
+    // Share all local tracks
     const stream = localStreamRef.current;
     if (stream) {
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
     }
 
-    // Receive remote stream
+    // Receive remote stream → mark participant as connected
     pc.ontrack = (event) => {
       if (event.streams?.[0]) {
-        const remoteS = event.streams[0];
         setParticipants(prev =>
-          prev.map(p => p.id === participantId ? { ...p, stream: remoteS, connected: true } : p)
+          prev.map(p =>
+            p.id === participantId ? { ...p, stream: event.streams[0], connected: true } : p
+          )
         );
       }
     };
 
-    // Relay ICE candidates
+    // Trickle ICE — relay local candidates to the remote peer via signaling server
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit('call:conference:ice-candidate', {
@@ -785,18 +890,51 @@ const CallScreen = ({ route, navigation }) => {
       }
     };
 
-    // Connection state
-    pc.onconnectionstatechange = () => {
-      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
-        setParticipants(prev =>
-          prev.map(p => p.id === participantId ? { ...p, connected: false } : p)
-        );
+    // ICE state drives the connected/reconnecting/failed UI for each participant
+    pc.oniceconnectionstatechange = () => {
+      switch (pc.iceConnectionState) {
+        case 'connected':
+        case 'completed':
+          setParticipants(prev =>
+            prev.map(p => p.id === participantId ? { ...p, connected: true } : p)
+          );
+          break;
+        case 'disconnected':
+          setParticipants(prev =>
+            prev.map(p => p.id === participantId ? { ...p, connected: false } : p)
+          );
+          break;
+        case 'failed':
+          // Remove stale ICE state for this peer so a fresh offer can be negotiated
+          confRemoteDescSetRef.current.delete(participantId);
+          confIceCandidateQueuesRef.current.delete(participantId);
+          setParticipants(prev =>
+            prev.map(p => p.id === participantId ? { ...p, connected: false } : p)
+          );
+          break;
+        case 'closed':
+          confPeerConnectionsRef.current.delete(participantId);
+          setParticipants(prev => prev.filter(p => p.id !== participantId));
+          break;
       }
     };
 
     if (asInitiator) {
       try {
-        const offer = await pc.createOffer();
+        // Guard: only create an offer if the connection is in a negotiable state
+        if (pc.signalingState !== 'stable') {
+          console.warn('Conference offer skipped — not stable:', pc.signalingState);
+          return pc;
+        }
+
+        // Reset the ICE queue for this peer before starting a fresh negotiation
+        confRemoteDescSetRef.current.delete(participantId);
+        confIceCandidateQueuesRef.current.delete(participantId);
+
+        const offer = await pc.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: callType === 'video',
+        });
         await pc.setLocalDescription(offer);
         socket.emit('call:conference:offer', {
           targetId: participantId,
@@ -810,12 +948,18 @@ const CallScreen = ({ route, navigation }) => {
     }
 
     return pc;
-  }, [userId]);
+  }, [userId, callType]);
 
   // ─── Conference event handlers ────────────────────────────────
 
   /** Someone we invited accepted the call */
   const handleInviteAccepted = useCallback(async ({ accepterId, accepterName, accepterPhoto }) => {
+    // Cancel the "no-answer" timeout for this participant
+    if (inviteTimersRef.current.has(accepterId)) {
+      clearTimeout(inviteTimersRef.current.get(accepterId));
+      inviteTimersRef.current.delete(accepterId);
+    }
+
     setParticipants(prev => {
       const exists = prev.find(p => p.id === accepterId);
       if (!exists) {
@@ -826,7 +970,7 @@ const CallScreen = ({ route, navigation }) => {
       }
       return prev.map(p => p.id === accepterId ? { ...p, calling: false } : p);
     });
-    // We're the initiator for the new peer connection
+
     await createConferencePeerConnection(accepterId, true);
   }, [createConferencePeerConnection]);
 
@@ -850,13 +994,33 @@ const CallScreen = ({ route, navigation }) => {
     setParticipants(prev => prev.filter(p => p.id !== leaverId));
   }, []);
 
+  // Flush per-participant ICE candidate queue after setRemoteDescription succeeds.
+  const flushConfIceCandidates = async (participantId, pc) => {
+    const queue = confIceCandidateQueuesRef.current.get(participantId) || [];
+    confIceCandidateQueuesRef.current.delete(participantId);
+    for (const candidate of queue) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (err) {
+        console.warn('Queued conference ICE candidate error:', err);
+      }
+    }
+  };
+
   /** Receive SDP offer from a conference peer */
-  const handleConferenceOffer = useCallback(async ({ fromId, offer, conferenceId }) => {
+  const handleConferenceOffer = useCallback(async ({ fromId, offer }) => {
     if (!RTCPeerConnection) return;
     let pc = confPeerConnectionsRef.current.get(fromId);
     if (!pc) pc = await createConferencePeerConnection(fromId, false);
     try {
+      // Clear remote-desc flag so buffered candidates aren't applied early
+      confRemoteDescSetRef.current.delete(fromId);
       await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      confRemoteDescSetRef.current.add(fromId);
+
+      // Flush any ICE candidates that arrived before this remote description
+      await flushConfIceCandidates(fromId, pc);
+
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('call:conference:answer', {
@@ -869,19 +1033,34 @@ const CallScreen = ({ route, navigation }) => {
   /** Receive SDP answer from a conference peer */
   const handleConferenceAnswer = useCallback(async ({ fromId, answer }) => {
     const pc = confPeerConnectionsRef.current.get(fromId);
-    if (pc) {
-      try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); }
-      catch (err) { console.error('Conference answer error:', err); }
-    }
+    if (!pc) return;
+    try {
+      // Guard: ignore if already stable (duplicate answer)
+      if (pc.signalingState === 'stable') return;
+      confRemoteDescSetRef.current.delete(fromId);
+      await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      confRemoteDescSetRef.current.add(fromId);
+      await flushConfIceCandidates(fromId, pc);
+    } catch (err) { console.error('Conference answer error:', err); }
   }, []);
 
-  /** Receive ICE candidate from a conference peer */
+  /** Receive ICE candidate from a conference peer — buffer until remote desc is set */
   const handleConferenceIce = useCallback(async ({ fromId, candidate }) => {
+    if (!candidate) return;
     const pc = confPeerConnectionsRef.current.get(fromId);
-    if (pc && candidate) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
-      catch (err) { console.error('Conference ICE error:', err); }
+
+    if (!pc || !confRemoteDescSetRef.current.has(fromId)) {
+      // Queue the candidate — it will be flushed after setRemoteDescription
+      if (!confIceCandidateQueuesRef.current.has(fromId)) {
+        confIceCandidateQueuesRef.current.set(fromId, []);
+      }
+      confIceCandidateQueuesRef.current.get(fromId).push(candidate);
+      return;
     }
+
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (err) { console.error('Conference ICE error:', err); }
   }, []);
 
   /**
@@ -922,15 +1101,15 @@ const CallScreen = ({ route, navigation }) => {
     });
   }, [isConference, existingParticipants, userId, user]);
 
-  /** Invite a connection from the user's connected list to this call */
+  /** Invite a connection (must be in the user's connections list) to this call */
   const inviteToCall = useCallback(async (connection) => {
-    const connId   = connection.id || connection._id;
-    const connName = [connection.firstName, connection.lastName].filter(Boolean).join(' ') || 'Unknown';
+    const connId    = String(connection.id || connection._id);
+    const connName  = [connection.firstName, connection.lastName].filter(Boolean).join(' ') || 'Unknown';
     const connPhoto = connection.photos?.[0] || null;
 
-    // Add with "calling" badge immediately
+    // Show "calling" badge on the participant strip immediately for optimistic feedback
     setParticipants(prev => {
-      if (prev.find(p => p.id === connId)) return prev;
+      if (prev.find(p => String(p.id) === connId)) return prev;
       return [...prev, {
         id: connId, name: connName, photo: connPhoto,
         stream: null, muted: false, videoEnabled: true, connected: false, calling: true,
@@ -938,36 +1117,68 @@ const CallScreen = ({ route, navigation }) => {
     });
     setShowAddPeople(false);
 
-    // Build current participant list so invited user can connect to everyone
+    // Auto-remove the "calling" badge after 30 s if the invitee doesn't respond
+    const noAnswerTimer = setTimeout(() => {
+      setParticipants(prev => {
+        const entry = prev.find(p => String(p.id) === connId);
+        // Only remove if still in "calling" state (not yet connected)
+        if (entry?.calling) return prev.filter(p => String(p.id) !== connId);
+        return prev;
+      });
+      inviteTimersRef.current.delete(connId);
+    }, 30_000);
+    inviteTimersRef.current.set(connId, noAnswerTimer);
+
+    // Build the full participant snapshot for the invitee so they can connect to everyone.
+    // Deduplicate using a Set to prevent the same userId appearing twice.
+    const seen = new Set();
     const allCurrentParticipants = [
-      { id: userId, name: [user?.firstName, user?.lastName].filter(Boolean).join(' '), photo: user?.photos?.[0] },
+      { id: userId,       name: [user?.firstName, user?.lastName].filter(Boolean).join(' '), photo: user?.photos?.[0] || null },
       { id: remoteUserId, name: remoteName, photo: remotePhoto },
       ...participants.map(p => ({ id: p.id, name: p.name, photo: p.photo })),
-    ].filter(p => p.id);
+    ].filter(p => {
+      if (!p.id || seen.has(String(p.id))) return false;
+      seen.add(String(p.id));
+      return true;
+    });
 
     socket.emit('call:invite', {
-      conferenceId: conferenceIdRef.current,
-      inviterId: userId,
-      inviterName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown',
-      inviterPhoto: user?.photos?.[0] || null,
-      inviteeId: connId,
+      conferenceId:        conferenceIdRef.current,
+      inviterId:           userId,
+      inviterName:         [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown',
+      inviterPhoto:        user?.photos?.[0] || null,
+      inviteeId:           connId,
       callType,
       existingParticipants: allCurrentParticipants,
     });
   }, [userId, user, remoteUserId, remoteName, remotePhoto, participants, callType]);
 
   /** Load the user's connected contacts for the Add People picker */
-  const fetchConnections = useCallback(async () => {
+  const fetchConnections = useCallback(async (forceRefresh = false) => {
+    // Skip if already cached, unless caller explicitly requests a refresh
+    if (connectionsFetchedRef.current && !forceRefresh) return;
+
     setConnectionsLoading(true);
+    setConnectionsFetchError(false);
     try {
       const res = await api.get('/connections');
-      const connected = (res.data?.connections || res.data || []).map(c => {
-        const other = c.requester?._id === userId ? c.target : c.requester;
-        return other || c;
+      const raw = res.data?.connections || res.data || [];
+
+      // Normalize each connection entry to the "other" participant.
+      // Use String() comparison to handle mixed ObjectId / string types from the API.
+      const connected = raw.map(c => {
+        const isRequester = String(c.requester?._id || c.requester?.id || c.requester) === String(userId);
+        const other = isRequester ? c.target : c.requester;
+        // Normalise the id field so downstream code has a consistent `id` property
+        if (other && !other.id && other._id) other.id = String(other._id);
+        return other || null;
       }).filter(Boolean);
+
       setMyConnections(connected);
+      connectionsFetchedRef.current = true;
     } catch (err) {
       console.error('Fetch connections error:', err);
+      setConnectionsFetchError(true);
     } finally {
       setConnectionsLoading(false);
     }
@@ -1012,8 +1223,11 @@ const CallScreen = ({ route, navigation }) => {
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
     if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
 
-    if (localStream) {
-      localStream.getTracks().forEach(track => track.stop());
+    // Use ref (always current) instead of localStream state which may be stale in a closure
+    const stream = localStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
     }
 
     if (peerConnectionRef.current) {
@@ -1026,6 +1240,16 @@ const CallScreen = ({ route, navigation }) => {
       try { pc.close(); } catch {}
     });
     confPeerConnectionsRef.current.clear();
+
+    // Reset all ICE queues so stale candidates from the previous session don't leak
+    iceCandidateQueueRef.current = [];
+    remoteDescriptionSetRef.current = false;
+    confIceCandidateQueuesRef.current.clear();
+    confRemoteDescSetRef.current.clear();
+
+    // Cancel any pending invite timers
+    inviteTimersRef.current.forEach(t => clearTimeout(t));
+    inviteTimersRef.current.clear();
   };
 
   // ═══════════════════════════════════════════════════════════════
@@ -1033,11 +1257,24 @@ const CallScreen = ({ route, navigation }) => {
   // ═══════════════════════════════════════════════════════════════
 
   const renderAddPeopleModal = () => {
+    // Filter using String() comparison so ObjectId / string mismatches don't leak
+    // random users — only verified connections are ever shown in this list.
+    const alreadyInCallIds = new Set([
+      String(remoteUserId),
+      String(userId),
+      ...participants.map(p => String(p.id)),
+    ]);
+
     const filtered = myConnections.filter(c => {
+      const cId = String(c.id || c._id);
+      if (alreadyInCallIds.has(cId)) return false;
       const name = [c.firstName, c.lastName].filter(Boolean).join(' ').toLowerCase();
-      const inCall = c._id === remoteUserId || participants.some(p => p.id === (c._id || c.id));
-      return name.includes(connectionSearch.toLowerCase()) && !inCall;
+      return name.includes(connectionSearch.toLowerCase());
     });
+
+    const alreadyCallingIds = new Set(
+      participants.filter(p => p.calling).map(p => String(p.id))
+    );
 
     return (
       <Modal
@@ -1048,67 +1285,132 @@ const CallScreen = ({ route, navigation }) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.addPeopleSheet}>
-            {/* Header */}
+
+            {/* ── Header ─────────────────────────────── */}
             <View style={styles.addPeopleHeader}>
-              <Text style={styles.addPeopleTitle}>Add to call</Text>
-              <TouchableOpacity onPress={() => setShowAddPeople(false)} style={styles.addPeopleClose}>
+              <View>
+                <Text style={styles.addPeopleTitle}>Add to call</Text>
+                <Text style={styles.addPeopleSubtitle}>Your connections only</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowAddPeople(false)}
+                style={styles.addPeopleClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={22} color="#333" />
               </TouchableOpacity>
             </View>
 
-            {/* Search bar */}
+            {/* ── Search bar ─────────────────────────── */}
             <View style={styles.addPeopleSearch}>
               <Ionicons name="search" size={16} color="#999" style={{ marginRight: 6 }} />
               <TextInput
                 value={connectionSearch}
                 onChangeText={setConnectionSearch}
-                placeholder="Search connections..."
+                placeholder="Search connections…"
                 placeholderTextColor="#bbb"
                 style={styles.addPeopleSearchInput}
                 autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
               />
             </View>
 
+            {/* ── Body ───────────────────────────────── */}
             {connectionsLoading ? (
-              <ActivityIndicator style={{ marginTop: 30 }} color="#581845" />
+              <View style={styles.addPeopleEmpty}>
+                <ActivityIndicator color="#581845" size="large" />
+                <Text style={[styles.addPeopleEmptyText, { marginTop: 12 }]}>
+                  Loading connections…
+                </Text>
+              </View>
+            ) : connectionsFetchError ? (
+              <View style={styles.addPeopleEmpty}>
+                <Ionicons name="wifi-outline" size={40} color="#ef4444" />
+                <Text style={[styles.addPeopleEmptyText, { color: '#ef4444', marginTop: 10 }]}>
+                  Couldn't load connections
+                </Text>
+                <TouchableOpacity
+                  style={styles.addPeopleRetryBtn}
+                  onPress={() => fetchConnections(true)}
+                  activeOpacity={0.75}
+                >
+                  <Ionicons name="refresh" size={15} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={styles.addPeopleRetryText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
             ) : filtered.length === 0 ? (
               <View style={styles.addPeopleEmpty}>
-                <Ionicons name="people-outline" size={40} color="#ccc" />
+                <Ionicons
+                  name={connectionSearch ? 'search-outline' : 'people-outline'}
+                  size={42}
+                  color="#ccc"
+                />
                 <Text style={styles.addPeopleEmptyText}>
-                  {connectionSearch ? 'No matches' : 'No connections available'}
+                  {connectionSearch
+                    ? 'No connections match your search'
+                    : myConnections.length === 0
+                    ? 'No connections yet'
+                    : 'All your connections are already on this call'}
                 </Text>
+                {!connectionSearch && myConnections.length === 0 && (
+                  <Text style={styles.addPeopleEmptyHint}>
+                    Connect with people on 34th Street to invite them to calls
+                  </Text>
+                )}
               </View>
             ) : (
               <FlatList
                 data={filtered}
-                keyExtractor={item => item._id || item.id}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.addPeopleRow}
-                    onPress={() => inviteToCall(item)}
-                    activeOpacity={0.7}
-                  >
-                    {item.photos?.[0] ? (
-                      <Image source={{ uri: item.photos[0] }} style={styles.addPeopleAvatar} />
-                    ) : (
-                      <View style={[styles.addPeopleAvatar, styles.addPeopleAvatarPlaceholder]}>
-                        <Ionicons name="person" size={22} color="#fff" />
-                      </View>
-                    )}
-                    <View style={styles.addPeopleInfo}>
-                      <Text style={styles.addPeopleName}>
-                        {[item.firstName, item.lastName].filter(Boolean).join(' ')}
-                      </Text>
-                      {item.currentRole && (
-                        <Text style={styles.addPeopleRole} numberOfLines={1}>{item.currentRole}</Text>
+                keyExtractor={item => String(item._id || item.id)}
+                contentContainerStyle={{ paddingBottom: 24 }}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => {
+                  const itemId = String(item.id || item._id);
+                  const isCalling = alreadyCallingIds.has(itemId);
+                  const displayName = [item.firstName, item.lastName].filter(Boolean).join(' ') || 'Unknown';
+
+                  return (
+                    <TouchableOpacity
+                      style={[styles.addPeopleRow, isCalling && styles.addPeopleRowCalling]}
+                      onPress={() => !isCalling && inviteToCall(item)}
+                      activeOpacity={isCalling ? 1 : 0.7}
+                    >
+                      {/* Avatar */}
+                      {item.photos?.[0] ? (
+                        <Image source={{ uri: item.photos[0] }} style={styles.addPeopleAvatar} />
+                      ) : (
+                        <View style={[styles.addPeopleAvatar, styles.addPeopleAvatarPlaceholder]}>
+                          <Ionicons name="person" size={22} color="#fff" />
+                        </View>
                       )}
-                    </View>
-                    <View style={styles.addPeopleCallBtn}>
-                      <Ionicons name="call" size={18} color="#fff" />
-                    </View>
-                  </TouchableOpacity>
-                )}
+
+                      {/* Name + role */}
+                      <View style={styles.addPeopleInfo}>
+                        <Text style={styles.addPeopleName} numberOfLines={1}>
+                          {displayName}
+                        </Text>
+                        {item.currentRole ? (
+                          <Text style={styles.addPeopleRole} numberOfLines={1}>
+                            {item.currentRole}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      {/* Action button */}
+                      {isCalling ? (
+                        <View style={styles.addPeopleCallingBadge}>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={styles.addPeopleCallingText}>Calling…</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.addPeopleCallBtn}>
+                          <Ionicons name="call" size={18} color="#fff" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
               />
             )}
           </View>
@@ -1217,7 +1519,7 @@ const CallScreen = ({ route, navigation }) => {
   if (callState === 'incoming') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <StatusBar style="light" translucent />
         <LinearGradient
           colors={['#1a1a2e', '#16213e', '#0f3460']}
           style={StyleSheet.absoluteFill}
@@ -1281,7 +1583,7 @@ const CallScreen = ({ route, navigation }) => {
   if (callState === 'ended') {
     return (
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+        <StatusBar style="light" translucent />
         <LinearGradient
           colors={['#1a1a2e', '#16213e', '#0f3460']}
           style={StyleSheet.absoluteFill}
@@ -1323,7 +1625,7 @@ const CallScreen = ({ route, navigation }) => {
     return (
       <>
       <View style={styles.container}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
+        <StatusBar style="light" translucent />
 
         {/* Remote Video (Full Screen) */}
         {remoteStream && isRemoteVideoEnabled && RTCView ? (
@@ -1474,7 +1776,7 @@ const CallScreen = ({ route, navigation }) => {
   return (
     <>
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar style="light" translucent />
       <LinearGradient
         colors={['#1a1a2e', '#16213e', '#0f3460']}
         style={StyleSheet.absoluteFill}
@@ -2142,6 +2444,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#22c55e',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  addPeopleSubtitle: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 2,
+    fontWeight: '400',
+  },
+  addPeopleRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#581845',
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    marginTop: 14,
+  },
+  addPeopleRetryText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addPeopleEmptyHint: {
+    color: '#bbb',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 6,
+    paddingHorizontal: 24,
+    lineHeight: 18,
+  },
+  addPeopleRowCalling: {
+    opacity: 0.6,
+  },
+  addPeopleCallingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f59e0b',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 6,
+  },
+  addPeopleCallingText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   // ═══ Audio Output Picker Modal (Android) ═══

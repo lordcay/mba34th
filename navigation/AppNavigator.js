@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { AuthContext } from '../context/AuthContext';
+import { StatusBar } from 'expo-status-bar';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
@@ -72,6 +73,15 @@ const AppNavigator = () => {
 
   return (
 <NavigationContainer ref={navigationRef}>
+      {/*
+        Global status bar baseline: dark icons on transparent background.
+        expo-status-bar integrates with React Navigation focus events — each screen
+        that renders its own <StatusBar style="light" /> overrides this while focused,
+        then this default is automatically restored when that screen unmounts.
+        This prevents the "white bar" bug caused by light-content persisting after
+        CallScreen or the photo viewer unmounts back to a white-background screen.
+      */}
+      <StatusBar style="dark" translucent backgroundColor="transparent" />
 
       <Stack.Navigator
         initialRouteName={user ? undefined : (onboardingDone ? 'Login' : 'Onboarding')}

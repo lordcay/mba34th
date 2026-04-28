@@ -47,6 +47,31 @@ async function requestAndroid13Permission() {
 }
 
 /**
+ * Register iOS notification categories for incoming call action buttons.
+ * "Accept" opens the app to the CallScreen; "Decline" rejects without opening.
+ * Must be called once at startup (after login).
+ */
+export async function setupNotificationCategories() {
+  try {
+    await Notifications.setNotificationCategoryAsync('incoming_call', [
+      {
+        identifier: 'accept_call',
+        buttonTitle: 'Accept',
+        options: { opensAppToForeground: true },
+      },
+      {
+        identifier: 'decline_call',
+        buttonTitle: 'Decline',
+        options: { isDestructive: true, opensAppToForeground: false },
+      },
+    ]);
+    console.log('✅ Call notification categories set up');
+  } catch (error) {
+    console.log('Notification category setup error:', error);
+  }
+}
+
+/**
  * Create Android notification channels with proper settings
  * These channels control sound, vibration, and importance for notifications
  */
@@ -119,6 +144,23 @@ async function createNotificationChannels() {
     enableLights: true,
     showBadge: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+
+  // Incoming calls channel — MAX importance, bypasses DND (like WhatsApp).
+  // 'incoming' references res/raw/incoming.wav, which is bundled via app.json
+  // "sounds": ["./assets/sounds/incoming.wav"] in the expo-notifications plugin.
+  await Notifications.setNotificationChannelAsync('calls', {
+    name: 'Incoming Calls',
+    description: 'Audio and video call notifications',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'incoming',
+    vibrationPattern: [0, 1000, 500, 1000, 500, 1000],
+    lightColor: '#22c55e',
+    enableVibrate: true,
+    enableLights: true,
+    showBadge: false,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    bypassDnd: true,
   });
 
   console.log('✅ Android notification channels created');

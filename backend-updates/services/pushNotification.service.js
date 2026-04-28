@@ -237,10 +237,92 @@ async function sendGenericNotification({ token, title, body, data = {} }) {
   });
 }
 
+/**
+ * Send an incoming call push notification to a user whose app is backgrounded or killed.
+ *
+ * On Android: routes to the 'calls' channel which has bypassDnd + incoming.wav ringtone.
+ * On iOS:     uses 'incoming.wav' (bundled via app.json) as the notification sound and
+ *             the 'incoming_call' category which shows Accept/Decline action buttons.
+ *
+ * Usage in your backend call handler (e.g. when 'call:initiate' socket event is received):
+ *
+ *   const pushService = require('./services/pushNotification.service');
+ *
+ *   // Look up the callee's push token from your DB
+ *   const callee = await User.findById(calleeId).select('expoPushToken');
+ *
+ *   // Send always — even if socket is connected — so the device rings on lock screen.
+ *   await pushService.sendCallPushNotification({
+ *     recipientToken:      callee.expoPushToken,
+ *     callerId,
+ *     callerName,
+ *     callerPhoto,
+ *     callType,            // 'audio' | 'video'
+ *     callId,
+ *     isConference:        false,
+ *     conferenceId:        null,
+ *     existingParticipants: [],
+ *   });
+ *
+ * @param {Object}   options
+ * @param {string}   options.recipientToken      - Callee's Expo push token
+ * @param {string}   options.callerId            - Caller's user ID
+ * @param {string}   options.callerName          - Caller's display name
+ * @param {string}   [options.callerPhoto]       - Caller's avatar URL
+ * @param {string}   [options.callType='audio']  - 'audio' | 'video'
+ * @param {string}   [options.callId]            - Unique call identifier
+ * @param {boolean}  [options.isConference]      - Conference call flag
+ * @param {string}   [options.conferenceId]      - Conference room ID
+ * @param {Array}    [options.existingParticipants] - Participants already on the call
+ */
+async function sendCallPushNotification({
+  recipientToken,
+  callerId,
+  callerName,
+  callerPhoto,
+  callType = 'audio',
+  callId,
+  isConference = false,
+  conferenceId = null,
+  existingParticipants = [],
+}) {
+  if (!recipientToken) {
+    console.log('⚠️  No push token for callee — skipping call push');
+    return null;
+  }
+
+  const callTypeLabel = callType === 'video' ? 'Video' : 'Voice';
+
+  return sendExpoPush({
+    to:        recipientToken,
+    title:     `Incoming ${callTypeLabel} Call`,
+    body:      `${callerName} is calling…`,
+    // 'incoming' references res/raw/incoming.wav on Android (via the 'calls' channel).
+    // The channel sound overrides this on Android; on iOS the content sound is used.
+    sound:     'incoming',
+    channelId: 'calls',
+    priority:  'high',
+    badge:     0, // don't increment badge for calls
+    data: {
+      kind:                 'call',
+      callId:               callId    ? String(callId)    : null,
+      callerId:             callerId  ? String(callerId)  : null,
+      callerName,
+      callerPhoto:          callerPhoto || null,
+      callType:             callType || 'audio',
+      isConference,
+      conferenceId:         conferenceId || null,
+      existingParticipants: existingParticipants || [],
+      timestamp:            Date.now(),
+    },
+  });
+}
+
 module.exports = {
   sendExpoPush,
   sendBatchExpoPush,
   sendDMNotification,
   sendGroupNotification,
   sendGenericNotification,
+  sendCallPushNotification,
 };
