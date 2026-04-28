@@ -326,7 +326,12 @@ const reportReasons = [
         return PlaceholderPhoto;
     }, [user]);
 
-    const school = useMemo(() => safeSchoolFromEmail(user?.email), [user?.email]);
+    const isAlumni = useMemo(() => (user?.type || '').toLowerCase() === 'alumni', [user?.type]);
+
+    const school = useMemo(() => {
+        if (isAlumni && user?.schoolGraduatedFrom) return user.schoolGraduatedFrom;
+        return safeSchoolFromEmail(user?.email);
+    }, [isAlumni, user?.email, user?.schoolGraduatedFrom]);
 
     const goToChat = () => {
         // Pass the minimal shape your PrivateChat expects

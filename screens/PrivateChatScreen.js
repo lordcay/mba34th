@@ -784,8 +784,16 @@ useEffect(() => {
     return () => socket.off('connect', onConnect);
   }, [userId]);
 
-  // Initial fetch of messages
+  // Initial fetch of messages — load cache instantly, then refresh from server
   useEffect(() => {
+    if (!peerId) return;
+    if (userId) {
+      AsyncStorage.getItem(`dm_cache_${userId}_${peerId}`).then(raw => {
+        if (raw) {
+          try { setMessages(JSON.parse(raw)); } catch {}
+        }
+      }).catch(() => {});
+    }
     fetchMessages();
   }, [peerId]);
 
@@ -1010,7 +1018,14 @@ useEffect(() => {
     if (!peerId) return;
     try {
       const res = await api.get(`/messages/${peerId}`);
-      setMessages(res.data.reverse());
+      const fresh = res.data.reverse();
+      setMessages(fresh);
+      if (userId) {
+        AsyncStorage.setItem(
+          `dm_cache_${userId}_${peerId}`,
+          JSON.stringify(fresh.slice(0, 100))
+        ).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to fetch messages:', err);
     }
