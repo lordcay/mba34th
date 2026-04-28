@@ -8,10 +8,11 @@ import {
   Image,
   TextInput,
   Animated,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
-import axios from 'axios';
 import moment from 'moment';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { AuthContext } from '../context/AuthContext';
 import { useUnread } from '../context/UnreadContext';
 import { Ionicons, Feather } from '@expo/vector-icons';
@@ -43,16 +44,15 @@ const ChatScreen = () => {
   // Connection state maps (userId -> status/count)
   const [connectionStatuses, setConnectionStatuses] = useState({});
   const [connectionCounts, setConnectionCounts] = useState({});
+  const [isFetching, setIsFetching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchConversations = useCallback(async () => {
+  const fetchConversations = useCallback(async ({ isRefresh = false } = {}) => {
+    if (isRefresh) setRefreshing(true);
+    else setIsFetching(true);
     try {
-      const res = await axios.get(
-        `${BASE_URL}/messages/conversations/list`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      console.log('Fetching conversations with token:', token);
+      // ✅ Use api service (reads token from AsyncStorage — avoids React state race)
+      const res = await api.get('/messages/conversations/list');
 
       const fresh = Array.isArray(res.data) ? res.data.slice() : [];
       fresh.sort(
@@ -80,13 +80,19 @@ const ChatScreen = () => {
         return merged;
       });
     } catch (err) {
-      console.error('❌ Failed to fetch conversations:', err);
+      console.error('❌ Failed to fetch conversations:', err?.response?.data || err.message);
+    } finally {
+      setIsFetching(false);
+      setRefreshing(false);
     }
-  }, [token]);
+  }, []);
 
-  useEffect(() => {
-    fetchConversations();
-  }, [fetchConversations]);
+  // ✅ Fetch on every screen focus (handles: initial mount, return from PrivateChat, token changes)
+  useFocusEffect(
+    useCallback(() => {
+      fetchConversations();
+    }, [fetchConversations])
+  );
 
   // Update total unread for tab badge
   useEffect(() => {
@@ -198,11 +204,7 @@ const ChatScreen = () => {
     return () => socket.off('conversation:update', onConvUpdate);
   }, [currentUserId]);
 
-  // Refetch when screen focused
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', fetchConversations);
-    return unsubscribe;
-  }, [navigation, fetchConversations]);
+  // (removed — replaced by useFocusEffect above)
 
   // Fetch connection statuses & counts for all conversations
   useEffect(() => {
@@ -394,8 +396,8 @@ const normalizeUser = (raw) => {
   };
 };
 
-// 🔑 Open DM, fetch full profile safely, then navigate
-const openDM = async (userObj) => {
+// 🔑 Navigate immediately — PrivateChatScreen fetches full profile itself
+const openDM = (userObj) => {
   const targetId = String(
     userObj.id || userObj.userId || userObj._id
   );
@@ -414,19 +416,8 @@ const openDM = async (userObj) => {
   // Also clear unread count in UnreadContext (HomeScreen badge sync)
   unreadDispatch({ type: 'clear-dm', otherUserId: targetId });
 
-  try {
-    // ✅ Use the same api instance as ChatRoomScreen
-    const res = await api.get(`/accounts/${targetId}`);
-
-    const apiUser = res.data?.user || res.data;
-    const fullUser = normalizeUser(apiUser);
-
-    navigation.navigate('PrivateChat', { user: fullUser });
-  } catch (err) {
-    console.error('❌ Failed to fetch full profile (DM open):', err?.response?.data || err.message);
-    // Still navigate with partial data if fetch fails
-    navigation.navigate('PrivateChat', { user: normalizeUser(userObj) });
-  }
+  // Navigate immediately with available data — no API round-trip before nav
+  navigation.navigate('PrivateChat', { user: normalizeUser(userObj) });
 };
 
   const renderItem = ({ item }) => {
@@ -598,12 +589,37 @@ const openDM = async (userObj) => {
         ))}
       </View>
 
-      <FlatList
-        data={finalList}
-        keyExtractor={(item) => String(item.userId || item._id)}
-        renderItem={renderItem}
-        contentContainerStyle={{ paddingBottom: 30 }}
-      />
+      {isFetching && conversations.length === 0 ? (
+        <View style={styles.emptyState}>
+          <ActivityIndicator size="large" color="#581845" />
+        </View>
+      ) : finalList.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="chatbubble-ellipses-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyText}>No messages yet</Text>
+          <Text style={styles.emptySubText}>Start a conversation with a verified member</Text>
+          <TouchableOpacity
+            style={styles.retryBtn}
+            onPress={() => fetchConversations({ isRefresh: true })}
+          >
+            <Text style={styles.retryBtnText}>Refresh</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={finalList}
+          keyExtractor={(item) => String(item.userId || item._id)}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 30 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => fetchConversations({ isRefresh: true })}
+              tintColor="#581845"
+            />
+          }
+        />
+      )}
     </View>
     </OnboardingOverlay>
   );
@@ -613,6 +629,11 @@ export default ChatScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingHorizontal: 15 },
+  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 },
+  emptyText: { fontSize: 18, fontWeight: '600', color: '#aaa', marginTop: 16 },
+  emptySubText: { fontSize: 14, color: '#ccc', marginTop: 6, textAlign: 'center', paddingHorizontal: 30 },
+  retryBtn: { marginTop: 20, paddingVertical: 10, paddingHorizontal: 28, backgroundColor: '#581845', borderRadius: 20 },
+  retryBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -220,6 +220,26 @@ export async function setupPushNotifications() {
 }
 
 /**
+ * Subscribe to Expo push token changes.
+ * Tokens can rotate after app reinstalls or OS-level resets.
+ * Call this ONCE at app startup (after login) and keep the subscription alive.
+ * Returns a subscription object — call `.remove()` to unsubscribe.
+ */
+export function subscribeToPushTokenRefresh() {
+  const subscription = Notifications.addPushTokenListener(async ({ data: newToken }) => {
+    if (!newToken) return;
+    console.log('🔄 Push token rotated — updating backend…', newToken.slice(0, 35));
+    try {
+      await AsyncStorage.setItem('expoPushToken', newToken);
+      await savePushTokenToBackend(newToken);
+    } catch (err) {
+      console.warn('⚠️ Failed to update rotated push token:', err?.message);
+    }
+  });
+  return subscription;
+}
+
+/**
  * Get stored push token
  */
 export async function getStoredPushToken() {

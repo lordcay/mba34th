@@ -88,7 +88,7 @@ import { showTopToast, playPing } from './utils/notify';
 import { UnreadProvider } from './context/UnreadContext';
 import { navigate } from './navigation/RootNavigation';
 import { useUnread } from './context/UnreadContext';
-import { setupPushNotifications } from './hooks/usePushNotifications';
+import { setupPushNotifications, subscribeToPushTokenRefresh } from './hooks/usePushNotifications';
 import { CallProvider } from './context/CallContext';
 import { OnboardingProvider } from './context/OnboardingContext';
 
@@ -282,35 +282,20 @@ const WithSocketListener = ({ children }) => {
   useEffect(() => {
     if (!userId) return;
     
-    // Setup push notifications and send token to backend
+    // Register device and save token to backend
     setupPushNotifications().catch((err) => {
       console.log('Push notification setup error:', err);
     });
+
+    // Subscribe to token rotation — update backend if token changes (reinstall, OS reset)
+    const tokenRefreshSub = subscribeToPushTokenRefresh();
+    return () => {
+      tokenRefreshSub?.remove();
+    };
   }, [userId]);
 
 
-  useEffect(() => {
-  // 1) User taps a notification while app is foreground/background
-  const subResponse = Notifications.addNotificationResponseReceivedListener(resp => {
-    try { 
-      const data = resp?.notification?.request?.content?.data;
-      openFromPushData(data); 
-    } catch {}
-  });
-
-  // 2) Notification received while app is foreground
-  // We let the system show the notification (shouldShowAlert: true above)
-  // but also play our custom sound
-  const subReceive = Notifications.addNotificationReceivedListener(notif => {
-    // Play sound when notification arrives in foreground
-    playPing();
-  });
-
-  return () => {
-    subResponse.remove();
-    subReceive.remove();
-  };
-}, []);
+  // Notification listeners are consolidated below (see the complete useEffect)
 
 
   // Register the socket with your userId whenever it’s available / reconnects
@@ -502,46 +487,51 @@ const onGroupNew = (msg) => {
 
 
 
-  // App.js (inside WithSocketListener)
-useEffect(() => {
-  // Fires when a push arrives while the app is foregrounded
-  const subReceived = Notifications.addNotificationReceivedListener((notification) => {
-    const { title, body, data } = notification.request?.content || {};
+  // ─── Consolidated notification listeners ────────────────────────────────
+  useEffect(() => {
+    // A) Notification arrives while app IS foregrounded → show in-app toast + sound
+    const subReceived = Notifications.addNotificationReceivedListener((notification) => {
+      const { title, body, data } = notification.request?.content || {};
 
-    // Optional: read extra fields you include in your push payload
-    const kind = data?.kind;                 // 'dm' | 'group' | ...
-    const senderName = data?.senderName;     // e.g. "Ada Lovelace"
-    const groupName  = data?.groupName;      // e.g. "The Village Drum"
-    const preview    = data?.preview;        // short message text
+      const kind       = data?.kind;       // 'dm' | 'group' | ...
+      const senderName = data?.senderName;
+      const groupName  = data?.groupName;
+      const preview    = data?.preview;
 
-    // Build a nice title/body if not provided
-    const toastTitle =
-      title ||
-      (kind === 'group'
-        ? `New message in ${groupName || 'Group chat'}`
-        : `New message from ${senderName || 'Someone'}`);
+      const toastTitle =
+        title ||
+        (kind === 'group'
+          ? `New message in ${groupName || 'Group chat'}`
+          : `New message from ${senderName || 'Someone'}`);
 
-    const toastBody = body || preview || '';
+      const toastBody = body || preview || '';
+      playPing();
+      showTopToast(toastTitle, toastBody);
+    });
 
-    // In-app toast + sound
-    playPing();
-    showTopToast(toastTitle, toastBody);
-  });
+    // B) User taps notification while app is open OR backgrounded (suspended)
+    const subResponse = Notifications.addNotificationResponseReceivedListener((response) => {
+      try {
+        const data = response?.notification?.request?.content?.data || {};
+        openFromPushData(data);
+      } catch {}
+    });
 
-  // (Optional) when user taps the notification (foreground/background)
+    // C) Cold-start: app was KILLED and user tapped a push notification to launch it.
+    //    getLastNotificationResponseAsync returns the notification that launched the app.
+    Notifications.getLastNotificationResponseAsync()
+      .then(response => {
+        if (response?.notification?.request?.content?.data) {
+          openFromPushData(response.notification.request.content.data);
+        }
+      })
+      .catch(() => {});
 
-   const subResponse = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response?.notification?.request?.content?.data || {};
-    // Navigate to the appropriate screen when user taps notification
-    openFromPushData(data);
-  });
-
-
-  return () => {
-    subReceived?.remove();
-    subResponse?.remove();
-  };
-}, []);
+    return () => {
+      subReceived?.remove();
+      subResponse?.remove();
+    };
+  }, []); // run once on mount
 
 
   return children;
@@ -551,16 +541,21 @@ export default function App() {
   const [appReady, setAppReady] = useState(false);
 
   useEffect(() => {
-    // Safety net: force hide splash after 8 seconds no matter what
+    // Last-resort safety net: if auth never resolves, force-hide after 12 s
+    // so the app never gets permanently stuck on the splash screen.
     const safetyTimer = setTimeout(() => {
       SplashScreen.hideAsync().catch(() => {});
       setAppReady(true);
       console.warn('[App] Safety timeout triggered - forcing app ready');
-    }, 8000);
+    }, 12000);
 
     async function prepare() {
       try {
         console.log('[App] prepare() started');
+        // Load fonts in the background while the splash is still showing.
+        // We do NOT call SplashScreen.hideAsync() here — AppNavigator will
+        // hide it once the auth check has finished, so users never see a
+        // blank/frozen screen between font-load and auth resolution.
         await Promise.race([
           Font.loadAsync({
             'Poppins_400Regular': require('./assets/fonts/Poppins_400Regular.ttf'),
@@ -573,9 +568,10 @@ export default function App() {
         console.warn('[App] Font loading failed, continuing anyway:', e);
       } finally {
         clearTimeout(safetyTimer);
+        // Mark fonts ready so the provider tree mounts; splash hide is
+        // delegated to AppNavigator (fires when isLoading flips to false).
         setAppReady(true);
-        console.log('[App] App ready, hiding splash');
-        SplashScreen.hideAsync().catch(() => {});
+        console.log('[App] App ready — splash will hide once auth resolves');
       }
     }
     prepare();
@@ -583,12 +579,10 @@ export default function App() {
     return () => clearTimeout(safetyTimer);
   }, []);
 
+  // While fonts are loading the splash screen is still covering the screen —
+  // return null so we don't flash a white "Loading…" view underneath the splash.
   if (!appReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <Text style={{ fontSize: 16, color: '#581845' }}>Loading...</Text>
-      </View>
-    );
+    return null;
   }
 
   return (

@@ -15,6 +15,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -22,23 +23,55 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 import logo2 from '../assets/logo1.png';
+import { getRegistrationProgress } from '../registrationUtils';
 
 const ACCENT = '#581845';
 const ACCENT_LIGHT = '#f5edf8';
 const GOLD = '#ffb60a';
+
+const PROGRAM_OPTIONS = [
+  'Bachelor of Arts (BA)',
+  'Bachelor of Science (BSc)',
+  'Bachelor of Engineering (BEng)',
+  'Bachelor of Commerce (BCom)',
+  'Bachelor of Laws (LLB)',
+  'Bachelor of Education (BEd)',
+  'Bachelor of Medicine (MBBS)',
+  'Master of Business Administration (MBA)',
+  'Master of Science (MSc)',
+  'Master of Arts (MA)',
+  'Master of Engineering (MEng)',
+  'Master of Laws (LLM)',
+  'Master of Finance (MFin)',
+  'Master of Public Health (MPH)',
+  'Master of Public Policy (MPP)',
+  'Master of Information Systems (MIS)',
+  'Doctor of Philosophy (PhD)',
+  'Doctor of Medicine (MD)',
+  'Doctor of Business Administration (DBA)',
+  'Postgraduate Diploma (PGDip)',
+  'Higher National Diploma (HND)',
+  'Associate Degree',
+  'Other',
+];
 
 const SchoolNotListedScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
 
-  // Form state
+  // Name from NameScreen registration progress (read-only)
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [nameLoaded, setNameLoaded] = useState(false);
+
+  // Form state
   const [gender, setGender] = useState('');
   const [phone, setPhone] = useState('');
   const [schoolEmail, setSchoolEmail] = useState('');
   const [program, setProgram] = useState('');
+  const [programModalVisible, setProgramModalVisible] = useState(false);
+  const [programSearch, setProgramSearch] = useState('');
   const [linkedIn, setLinkedIn] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -81,6 +114,15 @@ const SchoolNotListedScreen = () => {
     });
   }, [navigation]);
 
+  // Load firstName/lastName from NameScreen registration progress
+  useEffect(() => {
+    getRegistrationProgress('Name').then((data) => {
+      if (data?.firstName) setFirstName(data.firstName);
+      if (data?.lastName) setLastName(data.lastName);
+      setNameLoaded(true);
+    }).catch(() => setNameLoaded(true));
+  }, []);
+
   // OTP countdown timer
   useEffect(() => {
     if (otpTimer <= 0) return;
@@ -96,12 +138,6 @@ const SchoolNotListedScreen = () => {
     delete newErrors[field];
 
     switch (field) {
-      case 'firstName':
-        if (!value.trim()) newErrors.firstName = 'First name is required';
-        break;
-      case 'lastName':
-        if (!value.trim()) newErrors.lastName = 'Last name is required';
-        break;
       case 'gender':
         if (!value) newErrors.gender = 'Gender is required';
         break;
@@ -136,15 +172,9 @@ const SchoolNotListedScreen = () => {
   };
 
   const validateAll = () => {
-    const fields = {
-      firstName, lastName, gender, phone,
-      schoolEmail, program, linkedIn, password, confirmPassword,
-    };
     let valid = true;
     const newErrors = {};
 
-    if (!firstName.trim()) { newErrors.firstName = 'First name is required'; valid = false; }
-    if (!lastName.trim()) { newErrors.lastName = 'Last name is required'; valid = false; }
     if (!gender) { newErrors.gender = 'Gender is required'; valid = false; }
     if (!phone.trim()) { newErrors.phone = 'Phone number is required'; valid = false; }
     if (!schoolEmail.trim()) { newErrors.schoolEmail = 'School email is required'; valid = false; }
@@ -163,6 +193,10 @@ const SchoolNotListedScreen = () => {
 
   // Submit application — validate, send OTP, show modal
   const handleSubmit = async () => {
+    if (!firstName.trim() || !lastName.trim()) {
+      Alert.alert('Missing Name', 'Please go back and complete the Name step first.');
+      return;
+    }
     if (!validateAll()) {
       Alert.alert('Missing Fields', 'Please fill in all required fields correctly.');
       scrollRef.current?.scrollTo({ y: 0, animated: true });
@@ -217,7 +251,7 @@ const SchoolNotListedScreen = () => {
         gender,
         phone: phone.trim(),
         schoolEmail: schoolEmail.trim(),
-        program: program.trim(),
+        program: program.trim(),   // stored as fieldOfStudy on account at approval
         linkedIn: linkedIn.trim(),
         password,
         confirmPassword,
@@ -365,12 +399,22 @@ const SchoolNotListedScreen = () => {
                 <Text style={styles.sectionTitle}>Personal Information</Text>
               </View>
 
-              {renderInput('First Name', firstName, setFirstName, 'Enter your first name', {
-                field: 'firstName',
-              })}
-              {renderInput('Last Name', lastName, setLastName, 'Enter your last name', {
-                field: 'lastName',
-              })}
+              {/* Name sourced from NameScreen — read-only confirmation tag */}
+              {nameLoaded && (
+                <View style={styles.nameTag}>
+                  <Ionicons name="person-circle-outline" size={20} color={ACCENT} />
+                  <Text style={styles.nameTagText}>
+                    {firstName || lastName
+                      ? `${firstName} ${lastName}`.trim()
+                      : 'Name not set — please complete the Name step'}
+                  </Text>
+                  {!!(firstName || lastName) && (
+                    <View style={styles.nameTagBadge}>
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                    </View>
+                  )}
+                </View>
+              )}
 
               {/* Gender Selector */}
               <View style={styles.inputGroup}>
@@ -413,9 +457,23 @@ const SchoolNotListedScreen = () => {
                 <Text style={styles.sectionTitle}>Academic & Professional</Text>
               </View>
 
-              {renderInput('Program / Course of Study', program, setProgram, 'e.g., MBA, MSc Finance', {
-                field: 'program',
-              })}
+              {/* Program / Course of Study — modern dropdown */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Program / Course of Study <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <TouchableOpacity
+                  style={[styles.inputWrapper, styles.selectorWrapper, errors.program && styles.inputWrapperError]}
+                  onPress={() => { setProgramSearch(''); setProgramModalVisible(true); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.selectorText, !program && styles.selectorPlaceholder]}>
+                    {program || 'Select your program'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#888" />
+                </TouchableOpacity>
+                {errors.program && <Text style={styles.fieldError}>{errors.program}</Text>}
+              </View>
               {renderInput('LinkedIn Profile URL', linkedIn, setLinkedIn, 'https://linkedin.com/in/your-profile', {
                 field: 'linkedIn',
                 keyboardType: 'url',
@@ -558,6 +616,59 @@ const SchoolNotListedScreen = () => {
             </KeyboardAvoidingView>
           </Modal>
 
+          {/* Program Modal */}
+          <Modal visible={programModalVisible} animationType="slide" transparent onRequestClose={() => setProgramModalVisible(false)}>
+            <TouchableWithoutFeedback onPress={() => setProgramModalVisible(false)}>
+              <View style={styles.modalOverlay} />
+            </TouchableWithoutFeedback>
+            <View style={[styles.programSheet, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.modalTopRow}>
+                <Text style={styles.modalTitle}>Select Program</Text>
+                <TouchableOpacity onPress={() => setProgramModalVisible(false)}>
+                  <Text style={styles.modalCancel}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.programSearchWrap}>
+                <Ionicons name="search-outline" size={16} color="#999" style={{ marginRight: 8 }} />
+                <TextInput
+                  value={programSearch}
+                  onChangeText={setProgramSearch}
+                  placeholder="Search program..."
+                  placeholderTextColor="#bbb"
+                  style={styles.programSearchInput}
+                  autoCapitalize="none"
+                />
+                {programSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setProgramSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color="#ccc" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <FlatList
+                data={PROGRAM_OPTIONS.filter(p => p.toLowerCase().includes(programSearch.toLowerCase()))}
+                keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.programOption, program === item && styles.programOptionSelected]}
+                    onPress={() => {
+                      setProgram(item);
+                      setErrors((prev) => { const e = { ...prev }; delete e.program; return e; });
+                      setProgramModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.programOptionText, program === item && styles.programOptionTextSelected]}>
+                      {item}
+                    </Text>
+                    {program === item && <Ionicons name="checkmark-circle" size={20} color={ACCENT} />}
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#f5f5f5' }} />}
+              />
+            </View>
+          </Modal>
+
           {/* Gender Modal */}
           <Modal visible={genderModalVisible} animationType="slide" transparent onRequestClose={() => setGenderModalVisible(false)}>
             <TouchableWithoutFeedback onPress={() => setGenderModalVisible(false)}>
@@ -653,6 +764,34 @@ const styles = StyleSheet.create({
 
   // Form
   formContainer: { paddingHorizontal: 20, paddingTop: 8 },
+
+  // Name confirmation tag (populated from NameScreen)
+  nameTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: ACCENT_LIGHT,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: `${ACCENT}22`,
+  },
+  nameTagText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: ACCENT,
+  },
+  nameTagBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#27ae60',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   sectionHeader: {
     flexDirection: 'row',
@@ -902,4 +1041,42 @@ const styles = StyleSheet.create({
   },
   genderOptionText: { fontSize: 16, fontWeight: '600', color: '#333' },
   genderOptionTextSelected: { color: ACCENT },
+
+  // Program dropdown sheet
+  programSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '75%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  programSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  programSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  programOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  programOptionSelected: { backgroundColor: ACCENT_LIGHT, borderRadius: 8, paddingHorizontal: 10 },
+  programOptionText: { fontSize: 15, color: '#333', flex: 1 },
+  programOptionTextSelected: { color: ACCENT, fontWeight: '700' },
 });

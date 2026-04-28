@@ -18,6 +18,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import moment from 'moment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import api from '../services/api';
 import { RefreshControl } from 'react-native';
 import { Linking } from 'react-native';
 import { refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
@@ -39,9 +40,12 @@ const formatDobDisplay = (dobStr) => {
 };
 
 const ProfileScreen = () => {
-  const { user, logout, updateUser } = useContext(AuthContext);
+  const { user, logout, updateUser, userId } = useContext(AuthContext);
   const navigation = useNavigation();
-  const school = user?.email?.split('@')[1]?.split('.')[0] || 'Unknown School';
+  const isAlumni = (user?.type || '').toLowerCase() === 'alumni';
+  const school = isAlumni && user?.schoolGraduatedFrom
+    ? user.schoolGraduatedFrom
+    : (user?.email?.split('@')[1]?.split('.')[0] || 'Unknown School');
   const insets = useSafeAreaInsets();
 
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(null);
@@ -71,18 +75,7 @@ const ProfileScreen = () => {
     reordered.unshift(selected); // add to front
 
     try {
-      const token = await AsyncStorage.getItem('token');
-      const userId = await AsyncStorage.getItem('userId');
-
-      const res = await axios.put(
-        `${API_BASE_URL}/accounts/${userId}`,
-        { photos: reordered },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await api.put(`/accounts/${userId}`, { photos: reordered });
 
       if (res.data?.user) {
         updateUser(res.data.user); // refresh context
@@ -313,20 +306,20 @@ const ProfileScreen = () => {
       <View style={styles.section}>
 
         <Text style={styles.sectionTitle}>Academic Details</Text>
-                        <InfoRow label="University" value={school.toUpperCase()} />
-
-        {/* <InfoRow
-          label="University"
-          value={school
-            .split(' ')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-            .join(' ')
-          }
-        /> */}
-        {/* <InfoRow label="University" value={school} /> */}
-        <InfoRow label=" Field of Study" value={user.fieldOfStudy} />
-        <InfoRow label=" Program of Study" value={user.type} />
-        <InfoRow label="Graduation Year" value={user.graduationYear} />
+        <View style={styles.infoRowWrap}>
+          <Text style={styles.infoLabel}>{isAlumni ? 'Alumni School' : 'University'}</Text>
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+            <Text style={styles.infoValue}>{school.toUpperCase()}</Text>
+            {isAlumni && (
+              <View style={{ backgroundColor: '#581845', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>ALUMNI</Text>
+              </View>
+            )}
+          </View>
+        </View>
+        <InfoRow label="Degree / Field of Study" value={user?.fieldOfStudy || 'N/A'} />
+        {!isAlumni && <InfoRow label=" Program of Study" value={user?.type || 'N/A'} />}
+        {!isAlumni && <InfoRow label="Graduation Year" value={user?.graduationYear || 'N/A'} />}
         <View style={styles.infoRowWrap}>
   <Text style={styles.infoLabel}>LinkedIn</Text>
   {user.linkedIn ? (

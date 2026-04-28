@@ -455,7 +455,7 @@
 
 
 
-import React from 'react';
+import React, { useContext } from 'react';
 import Onboarding from 'react-native-onboarding-swiper';
 import {
   View,
@@ -468,6 +468,7 @@ import {
 } from 'react-native';
 import * as Animatable from 'react-native-animatable';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AuthContext } from '../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -501,7 +502,12 @@ const Done = (props) => <ButtonBase label="Done" {...props} />;
 /* ------------ Screen ------------ */
 const OnboardingScreen = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const handleComplete = () => {
+  const { markOnboardingDone } = useContext(AuthContext);
+
+  const handleComplete = async () => {
+    // Persist the "seen" flag via context (which also updates AuthContext state
+    // so AppNavigator will route to Login on the next cold launch automatically).
+    await markOnboardingDone();
     navigation.replace('Login');
   };
 
@@ -630,6 +636,12 @@ const styles = StyleSheet.create({
   barBtnText: {
     fontSize: 16,
     color: '#fff',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
   },
 });
 

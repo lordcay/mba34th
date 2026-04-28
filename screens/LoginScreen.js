@@ -247,7 +247,7 @@
 
 
 
-import React, { useState, useContext, useEffect, useCallback } from 'react';
+import React, { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -275,6 +275,7 @@ import logo2 from '../assets/logo1.png';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { API_BASE_URL } from '../config';
 import {
   isBiometricSupported,
@@ -286,6 +287,24 @@ import {
 } from '../services/biometric.service';
 
 
+const normalizeAuthUser = (payload) => {
+  if (!payload || typeof payload !== 'object') return null;
+  const source = payload.user ?? payload;
+  if (!source || typeof source !== 'object') return null;
+
+  const {
+    token: _token,
+    jwtToken: _jwtToken,
+    refreshToken: _refreshToken,
+    ...user
+  } = source;
+
+  return user?.id || user?._id || user?.email ? user : null;
+};
+
+const NETWORK_REQUEST_TIMEOUT_MS = 20000;
+
+
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -294,7 +313,8 @@ const LoginScreen = () => {
   const [loading, setLoading] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricType, setBiometricType] = useState('Biometrics');
-  const [biometricPulse] = useState(new Animated.Value(1));
+  const biometricGlow = useRef(new Animated.Value(0)).current;
+  const passwordRef = useRef(null);
   const navigation = useNavigation();
   const { login, checkProfileCompletion } = useContext(AuthContext);
 
@@ -303,17 +323,18 @@ const LoginScreen = () => {
     checkBiometricAvailability();
   }, []);
 
-  // Pulse animation for biometric button
+  // Glow pulse animation for biometric card
   useEffect(() => {
-    if (biometricAvailable) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(biometricPulse, { toValue: 1.05, duration: 1200, useNativeDriver: true }),
-          Animated.timing(biometricPulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        ])
-      ).start();
-    }
-  }, [biometricAvailable]);
+    if (!biometricAvailable) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(biometricGlow, { toValue: 1, duration: 1800, useNativeDriver: false }),
+        Animated.timing(biometricGlow, { toValue: 0, duration: 1800, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [biometricAvailable, biometricGlow]);
 
   const checkBiometricAvailability = async () => {
     const { supported } = await isBiometricSupported();
@@ -350,7 +371,10 @@ const LoginScreen = () => {
       // Verify stored token is still valid by calling user endpoint
       const verifyRes = await axios.get(
         `${API_BASE_URL}/accounts/${creds.userId}`,
-        { headers: { Authorization: `Bearer ${creds.token}` } }
+        {
+          headers: { Authorization: `Bearer ${creds.token}` },
+          timeout: NETWORK_REQUEST_TIMEOUT_MS,
+        }
       ).catch(() => null);
 
       if (!verifyRes?.data?.user) {
@@ -363,12 +387,10 @@ const LoginScreen = () => {
       }
 
       // Token is still valid — log in directly
-      await login(creds.token, creds.userId, creds.email);
+      const verifiedUser = normalizeAuthUser(verifyRes.data);
+      const loggedInUser = await login(creds.token, creds.userId, creds.email, verifiedUser);
 
-      const storedUser = await AsyncStorage.getItem('user');
-      const parsedUser = JSON.parse(storedUser);
-
-      if (checkProfileCompletion(parsedUser)) {
+      if (checkProfileCompletion(loggedInUser)) {
         navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
       } else {
         navigation.reset({ index: 0, routes: [{ name: 'EditProfile' }] });
@@ -399,16 +421,15 @@ const LoginScreen = () => {
     try {
       const response = await axios.post(
         API_BASE_URL + '/accounts/authenticate',
-        { email: email.trim(), password: password.trim() }
+        { email: email.trim(), password: password.trim() },
+        { timeout: NETWORK_REQUEST_TIMEOUT_MS }
       );
-      const { token, id, user } = response.data;
+      const { token } = response.data;
+      const authUser = normalizeAuthUser(response.data);
+      const resolvedUserId = response.data?.id || authUser?.id || authUser?._id;
 
       // 1️⃣ Login & store user (pass email for biometric credential update)
-      await login(token, id, email.trim());
-
-      // 2️⃣ Get stored user back from AsyncStorage
-      const storedUser = await AsyncStorage.getItem('user');
-      const parsedUser = JSON.parse(storedUser);
+      const loggedInUser = await login(token, resolvedUserId, email.trim(), authUser);
 
       // 3️⃣ Offer biometric setup if device supports it and not yet enabled
       const { supported } = await isBiometricSupported();
@@ -425,7 +446,7 @@ const LoginScreen = () => {
               onPress: async () => {
                 const authResult = await authenticateWithBiometrics(`Enable ${typeName}`);
                 if (authResult.success) {
-                  await saveBiometricCredentials(email.trim(), token, id);
+                  await saveBiometricCredentials(email.trim(), token, String(resolvedUserId));
                 }
               },
             },
@@ -434,7 +455,7 @@ const LoginScreen = () => {
       }
 
       // 4️⃣ Check profile completion
-      if (checkProfileCompletion(parsedUser)) {
+      if (checkProfileCompletion(loggedInUser)) {
         // Profile is complete, go to full app
         navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
       } else {
@@ -463,6 +484,7 @@ const LoginScreen = () => {
 
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
             style={{ flex: 1 }}
           >
             <ScrollView
@@ -478,16 +500,22 @@ const LoginScreen = () => {
                   style={styles.input}
                   value={email}
                   onChangeText={(text) => setEmail(text.toLowerCase())}
-
-                  // onChangeText={setEmail}
                   keyboardType="email-address"
                   returnKeyType="next"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  keyboardAppearance="light"
+                  onSubmitEditing={() => passwordRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
 
               <View style={styles.inputCard}>
                 <AntDesign name="lock" size={22} color="#581845" />
                 <TextInput
+                  ref={passwordRef}
                   placeholder="Password"
                   placeholderTextColor="#999"
                   style={styles.input}
@@ -495,6 +523,11 @@ const LoginScreen = () => {
                   onChangeText={setPassword}
                   secureTextEntry={secureText}
                   returnKeyType="go"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="password"
+                  textContentType="password"
+                  keyboardAppearance="light"
                   onSubmitEditing={signInUser}
                 />
                 <TouchableOpacity onPress={() => setSecureText(!secureText)}>
@@ -506,24 +539,69 @@ const LoginScreen = () => {
                 <Text style={styles.loginText}>Sign In</Text>
               </TouchableOpacity>
 
-              {/* Biometric Login Button */}
+              {/* Biometric Login — Modern Card Design */}
               {biometricAvailable && (
-                <Animated.View style={[styles.biometricContainer, { transform: [{ scale: biometricPulse }] }]}>
+                <View style={styles.biometricSection}>
+                  {/* Divider */}
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or continue with</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+
+                  {/* Biometric Card */}
                   <TouchableOpacity
                     onPress={handleBiometricLogin}
-                    style={styles.biometricButton}
-                    activeOpacity={0.7}
+                    activeOpacity={0.85}
+                    style={styles.biometricCardOuter}
                   >
-                    <View style={styles.biometricIconWrap}>
-                      <MaterialCommunityIcons
-                        name={biometricType === 'Face ID' ? 'face-recognition' : 'fingerprint'}
-                        size={32}
-                        color="#581845"
-                      />
-                    </View>
-                    <Text style={styles.biometricText}>Sign in with {biometricType}</Text>
+                    <Animated.View
+                      style={[
+                        styles.biometricGlowRing,
+                        {
+                          borderColor: biometricGlow.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['rgba(88,24,69,0.15)', 'rgba(88,24,69,0.55)'],
+                          }),
+                          shadowOpacity: biometricGlow.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0.08, 0.28],
+                          }),
+                        },
+                      ]}
+                    >
+                      <LinearGradient
+                        colors={['#ffffff', '#fdf3f9']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.biometricCardInner}
+                      >
+                        {/* Icon */}
+                        <View style={styles.biometricIconRing}>
+                          <LinearGradient
+                            colors={['#7b2d6a', '#581845']}
+                            style={styles.biometricIconGradient}
+                          >
+                            <MaterialCommunityIcons
+                              name={biometricType === 'Face ID' ? 'face-recognition' : 'fingerprint'}
+                              size={28}
+                              color="#fff"
+                            />
+                          </LinearGradient>
+                        </View>
+
+                        {/* Label */}
+                        <View style={styles.biometricLabelCol}>
+                          <Text style={styles.biometricTitle}>Sign in with {biometricType}</Text>
+                          <Text style={styles.biometricSubtitle}>Fast & secure authentication</Text>
+                        </View>
+
+                        {/* Arrow */}
+                        <Ionicons name="chevron-forward" size={18} color="#c084b6" />
+                      </LinearGradient>
+                    </Animated.View>
                   </TouchableOpacity>
-                </Animated.View>
+                </View>
               )}
 
               <TouchableOpacity onPress={() => navigation.navigate('ForgotPasswordScreen')}>
@@ -597,29 +675,41 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 30,
+    borderRadius: 14,
     paddingHorizontal: 18,
-    paddingVertical: 12,
-    marginBottom: 20,
-    elevation: 4,
+    paddingVertical: 14,
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: '#581845',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(88,24,69,0.08)',
   },
   input: {
     flex: 1,
     marginLeft: 12,
     color: '#222',
+    fontSize: 15,
   },
   loginButton: {
     backgroundColor: '#581845',
-    paddingVertical: 15,
-    borderRadius: 30,
-    marginTop: 10,
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginTop: 8,
     elevation: 4,
+    shadowColor: '#581845',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   loginText: {
     color: '#fff',
     textAlign: 'center',
-    fontWeight: '600',
-    fontSize: 18,
+    fontWeight: '700',
+    fontSize: 17,
+    letterSpacing: 0.3,
   },
   forgotText: {
     color: '#581845',
@@ -642,35 +732,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 999,
   },
-  biometricContainer: {
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 4,
+  biometricSection: {
+    marginTop: 28,
   },
-  biometricButton: {
+  dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(88, 24, 69, 0.06)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(88, 24, 69, 0.2)',
-    borderRadius: 30,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    gap: 10,
+    marginBottom: 18,
   },
-  biometricIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(88, 24, 69, 0.1)',
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#e8d8e5',
+  },
+  dividerText: {
+    color: '#9e7090',
+    fontSize: 12,
+    fontWeight: '500',
+    marginHorizontal: 12,
+    letterSpacing: 0.3,
+  },
+  biometricCardOuter: {
+    borderRadius: 18,
+  },
+  biometricGlowRing: {
+    borderRadius: 18,
+    borderWidth: 1.5,
+    shadowColor: '#581845',
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 6,
+    backgroundColor: '#fff',
+  },
+  biometricCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 17,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  biometricIconRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    overflow: 'hidden',
+  },
+  biometricIconGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  biometricText: {
-    color: '#581845',
+  biometricLabelCol: {
+    flex: 1,
+  },
+  biometricTitle: {
+    color: '#2d0a22',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  biometricSubtitle: {
+    color: '#9e7090',
+    fontSize: 12,
+    fontWeight: '400',
   },
   supportRow: {
     flexDirection: 'row',

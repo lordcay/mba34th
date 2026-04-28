@@ -19,7 +19,7 @@
     <key>CFBundlePackageType</key>
     <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.10</string>
+    <string>2.0.0</string>
     <key>CFBundleSignature</key>
     <string>????</string>
     <key>CFBundleURLTypes</key>
@@ -32,7 +32,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>60</string>
+    <string>72</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSApplicationQueriesSchemes</key>
@@ -54,12 +54,18 @@
     <string>34th Street needs full calendar access to help you schedule and manage events.</string>
     <key>NSCalendarsUsageDescription</key>
     <string>34th Street may access your calendar to help you schedule and manage events.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>34th Street may access your reminders to help you manage event reminders.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>34th Street may access your reminders to help you manage event reminders.</string>
     <key>NSCameraUsageDescription</key>
     <string>Allow 34thstreet to access your camera to take a new profile picture.</string>
     <key>NSContactsUsageDescription</key>
     <string>We need access to your contacts to help you find and connect with friends on 34th Street.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>Use Face ID to sign in to your 34th Street account quickly and securely.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>34th Street uses your location to show your city, calculate nearby members and events, and let you refresh your location when you choose.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow 34thstreet to access your microphone for voice and video calls.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
@@ -75,9 +81,6 @@
     </array>
     <key>UIBackgroundModes</key>
     <array>
-      <string>fetch</string>
-      <string>remote-notification</string>
-      <string>voip</string>
       <string>audio</string>
     </array>
     <key>UILaunchStoryboardName</key>

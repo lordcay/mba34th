@@ -1009,12 +1009,7 @@ useEffect(() => {
   const fetchMessages = async () => {
     if (!peerId) return;
     try {
-      const res = await axios.get(
-        `${BASE_URL}/messages/${peerId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await api.get(`/messages/${peerId}`);
       setMessages(res.data.reverse());
     } catch (err) {
       console.error('Failed to fetch messages:', err);
@@ -1042,13 +1037,7 @@ useEffect(() => {
   };
 
   try {
-    const res = await axios.post(
-      `${BASE_URL}/messages`,
-      payload,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const res = await api.post(`/messages`, payload);
 
     const saved = res.data;
 
@@ -1094,11 +1083,7 @@ useEffect(() => {
   const handleReaction = async (emoji) => {
     if (!selectedMessage) return;
     try {
-      await axios.post(
-        `${BASE_URL}/messages/${selectedMessage._id}/react`,
-        { emoji },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.post(`/messages/${selectedMessage._id}/react`, { emoji });
       // Update will come via socket
     } catch (err) {
       console.error('Failed to add reaction:', err);
@@ -1110,10 +1095,7 @@ useEffect(() => {
 
   const handleRemoveReaction = async (messageId) => {
     try {
-      await axios.delete(
-        `${BASE_URL}/messages/${messageId}/react`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      await api.delete(`/messages/${messageId}/react`);
     } catch (err) {
       console.error('Failed to remove reaction:', err);
     }
@@ -1985,17 +1967,13 @@ useEffect(() => {
     >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={
-          Platform.OS === 'ios' ? 'padding' : 'height'
-        }
-        keyboardVerticalOffset={
-          HEADER_HEIGHT + insets.top
-        }
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? HEADER_HEIGHT + insets.top : 0}
       >
         <View style={{ flex: 1 }}>
           <FlatList
             ref={flatListRef}
-            keyboardDismissMode="on-drag"
+            keyboardDismissMode="interactive"
             data={messages}
             renderItem={renderMessage}
             keyExtractor={(item, index) =>
@@ -2011,6 +1989,10 @@ useEffect(() => {
               paddingBottom: 12,
             }}
             inverted
+            initialNumToRender={20}
+            maxToRenderPerBatch={10}
+            windowSize={8}
+            removeClippedSubviews={Platform.OS === 'android'}
             onScrollToIndexFailed={(info) => {
               // Fallback for when scroll fails (item not rendered yet)
               setTimeout(() => {
@@ -2107,6 +2089,12 @@ useEffect(() => {
             multiline
             textAlignVertical="center"
             editable={!isUploading}
+            autoCorrect={true}
+            autoCapitalize="sentences"
+            spellCheck={true}
+            keyboardAppearance="default"
+            returnKeyType="default"
+            blurOnSubmit={false}
             onContentSizeChange={(e) => {
               if (!e?.nativeEvent?.contentSize) return;
               const height = e.nativeEvent.contentSize.height;

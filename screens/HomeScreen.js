@@ -981,12 +981,15 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
     );
   };
 
-  const schoolName =
-    u.email
-      ?.split('@')[1]
-      ?.split('.')[0]
-      ?.replace(/-/g, ' ')
-      ?.replace(/\b\w/g, (c) => c.toUpperCase()) || '';
+  const isAlumni = (u?.type || '').toLowerCase() === 'alumni';
+
+  const schoolName = isAlumni && u?.schoolGraduatedFrom
+    ? u.schoolGraduatedFrom
+    : (u.email
+        ?.split('@')[1]
+        ?.split('.')[0]
+        ?.replace(/-/g, ' ')
+        ?.replace(/\b\w/g, (c) => c.toUpperCase()) || '');
 
   return (
     <View style={styles.cardContainer}>
@@ -1108,8 +1111,19 @@ const UserCard = ({ u, navigation, socketStatusUpdate, presenceUpdate }) => {
         </View>
 
         <Text style={styles.schName}>
-          {schoolName.toUpperCase()} ({u.type} '{String(u.graduationYear).slice(-2)}) • {u.industry}
+          {schoolName.toUpperCase()}
+          {isAlumni
+            ? ` (${u.fieldOfStudy || 'Alumni'})` 
+            : ` (${u.type} '${String(u.graduationYear).slice(-2)}) • ${u.industry}`}
         </Text>
+        {isAlumni && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            <View style={{ backgroundColor: '#581845', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>ALUMNI</Text>
+            </View>
+            {!!u.industry && <Text style={styles.schName}>{u.industry}</Text>}
+          </View>
+        )}
 
         {!!u.bio && (
           <>

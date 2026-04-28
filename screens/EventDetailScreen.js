@@ -20,7 +20,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import * as Calendar from 'expo-calendar';
 import { AuthContext } from '../context/AuthContext';
 import eventService from '../services/event.service';
 import { sendConnectionRequest } from '../services/connection.service';
@@ -351,6 +350,15 @@ const EventDetailScreen = () => {
 
   // Toggle calendar (add/remove)
   const toggleCalendar = async () => {
+    let Calendar;
+    try {
+      Calendar = require('expo-calendar');
+    } catch (error) {
+      console.log('Calendar module load error:', error);
+      Alert.alert('Error', 'Calendar is not available right now. Please try again later.');
+      return;
+    }
+
     // Remove from calendar
     if (calendarAdded && calendarEventId) {
       try {

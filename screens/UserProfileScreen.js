@@ -30,6 +30,7 @@ import { playPing, showTopToast } from '../utils/notify';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import { API_BASE_URL as BASE_URL } from '../config';
 import PhotoViewer from '../components/PhotoViewer';
+import api from '../services/api';
 
 
 
@@ -281,26 +282,13 @@ const reportReasons = [
             
             try {
                 setLoading(true);
-                const token = await AsyncStorage.getItem('token');
-                const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
                 
-                // Try multiple endpoints to get full profile
                 let fullUser = null;
                 try {
-                    const res = await axios.get(`${BASE_URL}/accounts/${userId}`, { headers });
+                    const res = await api.get(`/accounts/${userId}`);
                     fullUser = res.data?.user || res.data;
                 } catch (e1) {
-                    try {
-                        const res = await axios.get(`${BASE_URL}/accounts/profile/${userId}`, { headers });
-                        fullUser = res.data?.user || res.data;
-                    } catch (e2) {
-                        try {
-                            const res = await axios.get(`${BASE_URL}/accounts/${userId}/profile`, { headers });
-                            fullUser = res.data?.user || res.data;
-                        } catch (e3) {
-                            console.log('All profile fetch attempts failed');
-                        }
-                    }
+                    console.log('Profile fetch failed:', e1?.message);
                 }
                 
                 if (fullUser) {
@@ -323,10 +311,7 @@ const reportReasons = [
     if (!userId) return; // Don't check if no valid user ID
     
     try {
-      const token = await AsyncStorage.getItem('token');
-      const res = await axios.get(`${BASE_URL}/blocks/status/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await api.get(`/blocks/status/${userId}`);
       setIsBlocked(res.data?.isBlocked || false);
     } catch (error) {
       console.error('⚠️ Failed to check block status:', error?.response?.data || error.message);
@@ -459,12 +444,9 @@ const openLinkedIn = async () => {
 
 const handleReportUser = async () => {
   try {
-    const token = await AsyncStorage.getItem('token');
-    await axios.post(`${BASE_URL}/reports`, {
+    await api.post(`/reports`, {
       reportedUser: user?.id,
       reason: reportReason,
-    }, {
-      headers: { Authorization: `Bearer ${token}` },
     });
 
     setReportSuccess(true);
@@ -489,12 +471,7 @@ const handleBlockUser = async () => {
   }
   
   try {
-    const token = await AsyncStorage.getItem('token');
-    const res = await axios.post(`${BASE_URL}/blocks`, {
-      blocked: userId
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    const res = await api.post(`/blocks`, { blocked: userId });
 
     const message = res?.data?.message || '';
     if (message.includes('unblocked')) {
@@ -522,13 +499,10 @@ if (!userId) {
 }
 
 try {
-const token = await AsyncStorage.getItem('token');
-await axios.post(`${BASE_URL}/reports`, {
+await api.post(`/reports`, {
 reportedUser: userId,
 reason: `${selectedReason} > ${selectedDetail}`,
 comment: reportComment
-}, {
-headers: { Authorization: `Bearer ${token}` }
 });
 setReportModalVisible(false);
 setSelectedReason('');
@@ -865,10 +839,20 @@ const renderReportModal = () => (
             {/* Academic Info */}
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Academic Details</Text>
-                <InfoRow label="University" value={school.toUpperCase()} />
-                <InfoRow label="Program of Study" value={user?.fieldOfStudy || 'N/A'} />
-                <InfoRow label="Field of Study" value={user?.type || 'N/A'} />
-                <InfoRow label="Graduation Year" value={user?.graduationYear || 'N/A'} />
+                <View style={styles.infoRowWrap}>
+                  <Text style={styles.infoLabel}>{isAlumni ? 'Alumni School' : 'University'}</Text>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <Text style={styles.infoValue}>{school.toUpperCase()}</Text>
+                    {isAlumni && (
+                      <View style={{ backgroundColor: '#581845', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                        <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>ALUMNI</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <InfoRow label="Degree / Field of Study" value={user?.fieldOfStudy || 'N/A'} />
+                {!isAlumni && <InfoRow label="Program" value={user?.type || 'N/A'} />}
+                {!isAlumni && <InfoRow label="Graduation Year" value={user?.graduationYear || 'N/A'} />}
             </View>
 
             {/* Professional Info */}

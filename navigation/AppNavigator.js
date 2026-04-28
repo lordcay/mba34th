@@ -1,8 +1,9 @@
 
 
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
+import * as SplashScreen from 'expo-splash-screen';
 import { AuthContext } from '../context/AuthContext';
 
 import OnboardingScreen from '../screens/OnboardingScreen';
@@ -50,27 +51,37 @@ import ServiceDetailScreen from '../screens/ServiceDetailScreen';
 const Stack = createStackNavigator();
 
 const AppNavigator = () => {
-  const { user, isLoading, checkProfileCompletion } = useContext(AuthContext);
+  const { user, isLoading, checkProfileCompletion, onboardingDone } = useContext(AuthContext);
+  const splashHiddenRef = useRef(false);
 
+  // Hide the splash screen exactly once, the moment auth resolves.
+  // This keeps the native splash visible through font loading + auth check,
+  // so users never see a blank/frozen screen on launch or after an update.
+  useEffect(() => {
+    if (!isLoading && !splashHiddenRef.current) {
+      splashHiddenRef.current = true;
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isLoading]);
+
+  // While auth is still initialising the splash screen is covering the UI,
+  // so we can safely render nothing here.
   if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
+    return null;
   }
 
   return (
 <NavigationContainer ref={navigationRef}>
 
       <Stack.Navigator
+        initialRouteName={user ? undefined : (onboardingDone ? 'Login' : 'Onboarding')}
         screenOptions={{
           headerShown: false,
           gestureEnabled: true,
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
           transitionSpec: {
-            open: { animation: 'timing', config: { duration: 500 } },
-            close: { animation: 'timing', config: { duration: 400 } },
+            open: { animation: 'timing', config: { duration: 260 } },
+            close: { animation: 'timing', config: { duration: 220 } },
           },
         }}
       >
@@ -87,7 +98,18 @@ const AppNavigator = () => {
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
-      <Stack.Screen name="PrivateChat" component={PrivateChatScreen} />
+      <Stack.Screen
+        name="PrivateChat"
+        component={PrivateChatScreen}
+        options={{
+          gestureEnabled: true,
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+          transitionSpec: {
+            open: { animation: 'spring', config: { stiffness: 1000, damping: 500, mass: 3, overshootClamping: true, restDisplacementThreshold: 10, restSpeedThreshold: 10 } },
+            close: { animation: 'timing', config: { duration: 200 } },
+          },
+        }}
+      />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="ConnectionRequests" component={ConnectionRequestsScreen} />
       <Stack.Screen name="ConnectionsScreen" component={ConnectionsScreen} />
@@ -106,6 +128,9 @@ const AppNavigator = () => {
   )
 ) : (
           // ✅ No user → Auth stack
+          // initialRouteName drives whether users see Onboarding or go straight to
+          // Login.  Both screens are always registered so navigation between them
+          // works regardless of the initial route.
           <>
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />

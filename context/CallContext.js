@@ -37,14 +37,18 @@ export const CallProvider = ({ children }) => {
       setIncomingCall(callData);
       setActiveCall({ callId: callData.callId, peerId: callData.callerId });
 
-      // Navigate to CallScreen
+      // Navigate to CallScreen — pass conference params if this is a group invite
       if (navigationRef.isReady()) {
         navigationRef.navigate('Call', {
-          isIncoming: true,
-          callType: callData.callType,
-          callerId: callData.callerId,
-          callerName: callData.callerName,
-          callerPhoto: callData.callerPhoto,
+          isIncoming:           true,
+          callType:             callData.callType,
+          callerId:             callData.callerId,
+          callerName:           callData.callerName,
+          callerPhoto:          callData.callerPhoto,
+          // Conference params (populated by call:invite event)
+          isConference:         callData.isConference || false,
+          conferenceId:         callData.conferenceId || null,
+          existingParticipants: callData.existingParticipants || [],
         });
       }
     };

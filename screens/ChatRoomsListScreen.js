@@ -17,6 +17,7 @@ import {
     TouchableOpacity,
 } from 'react-native';
 import axios from 'axios';
+import api from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -353,10 +354,7 @@ export default function ChatRoomsListScreen({ navigation, route }) {
     const fetchChatrooms = useCallback(async (isRefresh = false) => {
         try {
             if (isRefresh) setRefreshing(true);
-            const token = await AsyncStorage.getItem('token');
-            const res = await axios.get(API_URL, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const res = await api.get('/chatrooms');
             setChatrooms(res.data || []);
         } catch (err) {
             console.error('Error fetching chat rooms:', err);

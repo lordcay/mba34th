@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
+import React, { useState, useContext, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,9 @@ import {
   Switch,
   ActionSheetIOS,
   Dimensions,
+  Animated,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { Linking, Platform } from 'react-native';
 // import * as ImagePicker from 'expo-image-picker';
@@ -33,6 +35,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import OnboardingOverlay from '../components/OnboardingOverlay';
 import { setLocationSharingEnabled, refreshAndUpdateLocation, hasLocationPermission, requestLocationPermission } from '../services/location.service';
 import { API_BASE_URL } from '../config';
+import api from '../services/api';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   isBiometricSupported,
@@ -42,7 +45,7 @@ import {
   saveBiometricCredentials,
   clearBiometricCredentials,
 } from '../services/biometric.service';
-import { checkProfileCompletion, getProfileMissingFields } from '../utils/checkProfileCompletion';
+import { checkProfileCompletion, getProfileMissingFields, getLiveCompletionProgress } from '../utils/checkProfileCompletion';
 import RecoveryEmailModal from '../components/RecoveryEmailModal';
 // add this with your other imports
 // import { Linking } from 'react-native';
@@ -53,6 +56,7 @@ import RecoveryEmailModal from '../components/RecoveryEmailModal';
 const CLOUDINARY_URL = 'https://api.cloudinary.com/v1_1/de2wocs21/image/upload';
 // const CLOUDINARY_URL = 'cloudinary://742569622718158:5vorQLQ6D7p_HMnTyNuaqkKGpz0@de2wocs21'
 const UPLOAD_PRESET = 'unsigned_upload'; // or your configured preset
+const PROFILE_REQUEST_TIMEOUT_MS = 20000;
 
 
 const nukeLocal = async () => {
@@ -69,6 +73,7 @@ const EditProfileScreen = ({ navigation }) => {
 
   const isProfileForced = !checkProfileCompletion(user);
   const missingFields = isProfileForced ? getProfileMissingFields(user) : [];
+  const isAlumni = (user?.type || '').toLowerCase() === 'alumni';
 
 
   const [email, setEmail] = useState('');
@@ -111,6 +116,8 @@ const EditProfileScreen = ({ navigation }) => {
 
   // Track initial values for change detection
   const initialValues = useRef(null);
+  // Prevent re-initializing form fields when user context updates (e.g. from toggles)
+  const hasInitialized = useRef(false);
 
 
 
@@ -234,13 +241,18 @@ const handleBiometricToggle = async (value) => {
 
 
   useEffect(() => {
-    if (user) {
+    // Only initialize the form once. Subsequent updates to the user context
+    // (e.g. from the location-sharing or biometric toggle) must NOT reset form
+    // fields — the user may have unsaved changes in progress.
+    if (!user || hasInitialized.current) return;
+    hasInitialized.current = true;
+    {
       setEmail(user.email || '');
       setPhone(user.phone || '');
       setOrigin(user.origin || '');
       setBio(user.bio || '');
       setNickname(user.nickname || '');
-      // NEW — accept multiple backend keys and normalize
+      // Accept multiple backend keys and normalize
       const rawDob = user?.DOB ?? user?.dob ?? user?.dateOfBirth ?? '';
       if (rawDob) {
         const parsed = parseDobToDate(rawDob);
@@ -309,6 +321,31 @@ const handleBiometricToggle = async (value) => {
     );
   }, [phone, origin, bio, nickname, dob, languages, fieldOfStudy, graduationYear, industry, currentRole, linkedIn, funFact, rship, interests, photos]);
 
+  // ─── Live completion progress (updates in real-time as user fills fields) ───
+  const completionProgress = useMemo(() => {
+    if (!isProfileForced) return 1;
+    return getLiveCompletionProgress(
+      { origin, fieldOfStudy, graduationYear, currentRole, industry, bio, interests, photos },
+      user?.type
+    );
+  }, [isProfileForced, origin, fieldOfStudy, graduationYear, currentRole, industry, bio, interests, photos, user?.type]);
+
+  const liveMissingLabels = useMemo(() => {
+    if (!isProfileForced) return [];
+    const hasText = (v) => typeof v === 'string' && v.trim().length > 0;
+    const hasArray = (v) => Array.isArray(v) && v.length > 0;
+    const missing = [];
+    if (!hasText(origin)) missing.push('Country of Origin');
+    if (!isAlumni && !hasText(fieldOfStudy)) missing.push('Field of Study');
+    if (!isAlumni && !hasText(String(graduationYear || ''))) missing.push('Graduation Year');
+    if (!hasText(currentRole)) missing.push('Current / Previous Role');
+    if (!hasText(industry)) missing.push('Industry');
+    if (!hasText(bio)) missing.push('Bio');
+    if (!hasArray(interests)) missing.push('Interests');
+    if (!hasArray(photos)) missing.push('Photos');
+    return missing;
+  }, [isProfileForced, isAlumni, origin, fieldOfStudy, graduationYear, currentRole, industry, bio, interests, photos]);
+
 
 
   // small util: full local sign-out + data wipe
@@ -319,7 +356,7 @@ const hardSignOut = async () => {
   } catch {}
   // if you store other keys, also clear them here
   if (updateUser) updateUser(null);
-  navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
+  navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
 };
 
 
@@ -328,14 +365,9 @@ const handleDeleteAccount = async () => {
 
   try {
     setDeleting(true);
-    const token = await AsyncStorage.getItem('token');
     const userId = await AsyncStorage.getItem('userId');
 
-    // IMPORTANT: Your backend should perform irreversible deletion of the account
-    // and associated personal data (or queue it for deletion), then return 200.
-    await axios.delete(`${API_BASE_URL}/accounts/${userId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      // If your backend supports soft vs hard deletes, pass a flag:
+    await api.delete(`/accounts/${userId}`, {
       params: { hard: true }
     });
 
@@ -518,31 +550,46 @@ const handleDeleteAccount = async () => {
 
 
   const industryOptions = [
-    '💻 Tech',
-    '💼 Business / Consulting',
-    '🏦 Finance',
-    '🏥 Healthcare',
-    '🎓 Education',
-    '🎬 Media & Entertainment',
-    '⚖️ Law',
-    '📊 Venture Capital / Private Equity',
-    '🏛 Government & Public Sector',
-    '🚀 Entrepreneurship / Startups',
-    '🏠 Real Estate',
-    '📣 Marketing & Advertising',
-    '🛠 Engineering',
-    '🛍 Retail & E-Commerce',
-    '⛽️ Energy / Oil & Gas',
-    '🌾 Agriculture',
-    '👗 Fashion & Beauty',
-    '✈️ Travel & Tourism',
-    '🏋️ Sports & Wellness',
-    '🔧 Other',
+    { icon: '💻', label: 'Tech' },
+    { icon: '💼', label: 'Business / Consulting' },
+    { icon: '🏦', label: 'Finance' },
+    { icon: '🏥', label: 'Healthcare' },
+    { icon: '🎓', label: 'Education' },
+    { icon: '🎬', label: 'Media & Entertainment' },
+    { icon: '⚖️', label: 'Law' },
+    { icon: '📊', label: 'Venture Capital / Private Equity' },
+    { icon: '🏛', label: 'Government & Public Sector' },
+    { icon: '🚀', label: 'Entrepreneurship / Startups' },
+    { icon: '🏠', label: 'Real Estate' },
+    { icon: '📣', label: 'Marketing & Advertising' },
+    { icon: '🛠', label: 'Engineering' },
+    { icon: '🛍', label: 'Retail & E-Commerce' },
+    { icon: '⛽️', label: 'Energy / Oil & Gas' },
+    { icon: '🌾', label: 'Agriculture' },
+    { icon: '👗', label: 'Fashion & Beauty' },
+    { icon: '✈️', label: 'Travel & Tourism' },
+    { icon: '🏋️', label: 'Sports & Wellness' },
+    { icon: '🔧', label: 'Other' },
   ];
 
-  const filteredIndustries = industryOptions.filter((item) =>
-    item.toLowerCase().includes(industrySearch.toLowerCase())
+  const selectedIndustryOption = industryOptions.find(
+    (option) => option.label === industry || `${option.icon} ${option.label}` === industry
   );
+
+  const filteredIndustries = industryOptions.filter((option) => {
+    const query = industrySearch.trim().toLowerCase();
+    if (!query) return true;
+
+    return `${option.icon} ${option.label}`.toLowerCase().includes(query);
+  }).sort((left, right) => {
+    const leftSelected = left.label === industry;
+    const rightSelected = right.label === industry;
+
+    if (leftSelected && !rightSelected) return -1;
+    if (!leftSelected && rightSelected) return 1;
+
+    return left.label.localeCompare(right.label);
+  });
 
 
 
@@ -603,7 +650,6 @@ const handleDeleteAccount = async () => {
 
     try {
       setLoading(true);
-      const token = await AsyncStorage.getItem('token');
       const userId = await AsyncStorage.getItem('userId');
 
       const payload = {
@@ -612,8 +658,9 @@ const handleDeleteAccount = async () => {
         origin,
         bio,
          nickname,
-        DOB: dob,
-        dob: dob,
+        // Only include DOB if the user has one selected; omitting it preserves
+        // any existing DB value rather than overwriting it with null.
+        ...(dob ? { DOB: dob } : {}),
         languages: languages.split(',').map(lang => lang.trim()),
         graduationYear,
         industry: industry.replace(/^[^\w]+ /, ''),
@@ -626,32 +673,51 @@ const handleDeleteAccount = async () => {
         photos,
       };
 
-      const res = await axios.put(
-        `${API_BASE_URL}/accounts/${userId}`,
+      const res = await api.put(
+        `/accounts/${userId}`,
         payload,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          timeout: PROFILE_REQUEST_TIMEOUT_MS,
         }
       );
 
-      if (res.data?.user) {
-        await updateUser(res.data.user);
-        Toast.show({
-          type: 'success',
-          text1: 'Profile updated!',
-          text2: 'Your changes were saved.',
-        });
+      if (!res.data?.user) {
+        throw new Error('Profile update did not return a user object');
+      }
 
-        // If profile was forced (incomplete), the navigator auto-switches
-        // to the full app stack once updateUser triggers re-render
-        if (!isProfileForced) {
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Home' }],
-          });
-        }
+      await updateUser(res.data.user);
+      Toast.show({
+        type: 'success',
+        text1: 'Profile updated!',
+        text2: 'Your changes were saved.',
+      });
+
+      initialValues.current = {
+        phone,
+        origin,
+        bio,
+        nickname,
+        dob,
+        languages,
+        fieldOfStudy,
+        graduationYear,
+        industry,
+        currentRole,
+        linkedIn,
+        funFact,
+        rship,
+        interests: JSON.stringify(interests.slice().sort()),
+        photos: JSON.stringify(photos),
+      };
+
+      // If profile was forced (incomplete), the navigator auto-switches
+      // to the full app stack once updateUser triggers re-render
+      if (!isProfileForced) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'Home' }],
+        });
+      }
 
 
 //         navigation.getParent()?.reset({
@@ -664,8 +730,6 @@ const handleDeleteAccount = async () => {
 //   index: 0,
 //   routes: [{ name: 'Home' }], // adjust to your actual main route
 // });
-
-      }
 
     }  catch (error) {
   const status = error?.response?.status;
@@ -693,6 +757,8 @@ const handleDeleteAccount = async () => {
   }
 
   Alert.alert('Error', msg || 'Failed to update profile. Try again.');
+} finally {
+  setLoading(false);
 }}
 
     
@@ -742,15 +808,38 @@ const handleDeleteAccount = async () => {
 </View>
 
     {isProfileForced && (
-      <View style={styles.completionBanner}>
-        <Ionicons name="alert-circle" size={22} color="#fff" />
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.bannerTitle}>Almost there!</Text>
-          <Text style={styles.bannerText}>
-            Complete {missingFields.length === 1 ? 'this field' : 'these fields'} to unlock the app:{' '}
-            {missingFields.join(', ')}
-          </Text>
+      <View style={styles.progressCard}>
+        <View style={styles.progressCardTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.progressCardTitle}>
+              {completionProgress >= 1 ? 'Ready to save!' : 'Complete your profile'}
+            </Text>
+            <Text style={styles.progressCardSubtitle}>
+              {Math.round(completionProgress * 100)}% complete
+              {liveMissingLabels.length > 0 ? ` · ${liveMissingLabels.length} step${liveMissingLabels.length !== 1 ? 's' : ''} left` : ''}
+            </Text>
+          </View>
+          {completionProgress >= 1 ? (
+            <View style={styles.progressDoneCircle}>
+              <Ionicons name="checkmark" size={18} color="#fff" />
+            </View>
+          ) : (
+            <Text style={styles.progressPercent}>{Math.round(completionProgress * 100)}%</Text>
+          )}
         </View>
+        <View style={styles.progressTrack}>
+          <Animated.View
+            style={[
+              styles.progressFill,
+              { width: `${Math.min(Math.round(completionProgress * 100), 100)}%` },
+            ]}
+          />
+        </View>
+        {liveMissingLabels.length > 0 && (
+          <Text style={styles.progressMissing} numberOfLines={2}>
+            Still needed: {liveMissingLabels.join(' · ')}
+          </Text>
+        )}
       </View>
     )}
     
@@ -1031,44 +1120,113 @@ const handleDeleteAccount = async () => {
         placeholder="e.g. English, Spanish, French"
       />
 
+      {/* Alumni school — read-only banner for alumni users */}
+      {(user?.type || '').toLowerCase() === 'alumni' && user?.schoolGraduatedFrom && (
+        <View style={{ marginBottom: 4 }}>
+          <Text style={styles.label}>Alumni School</Text>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: '#f5edf8',
+            borderRadius: 10,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            borderWidth: 1,
+            borderColor: '#e5d5ec',
+            marginBottom: 8,
+          }}>
+            <Ionicons name="school-outline" size={18} color="#581845" />
+            <Text style={{ flex: 1, fontSize: 15, color: '#581845', fontWeight: '600' }}>
+              {user.schoolGraduatedFrom}
+            </Text>
+            <View style={{ backgroundColor: '#581845', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 }}>ALUMNI</Text>
+            </View>
+          </View>
+        </View>
+      )}
 
-
-      <Text style={styles.label}>Field of Study <Text style={styles.required}>*</Text></Text>
+      <Text style={styles.label}>
+        {(user?.type || '').toLowerCase() === 'alumni' ? 'Degree Held' : 'Field of Study'}
+        {' '}<Text style={styles.required}>*</Text>
+      </Text>
       <TextInput
         style={styles.input}
         value={fieldOfStudy}
         onChangeText={setFieldOfStudy}
-        placeholder="What's your area of concerntration?"
+        placeholder={(user?.type || '').toLowerCase() === 'alumni' ? 'e.g. MBA, MSc Finance, PhD' : "What's your area of concentration?"}
       />
 
 
       <Text style={styles.label}>Graduation Year <Text style={styles.required}>*</Text></Text>
-      <TouchableOpacity onPress={() => setShowYearModal(true)} style={styles.input}>
-        <Text style={{ color: graduationYear ? '#000' : '#999' }}>
-          {graduationYear || 'Select your graduation year'}
-        </Text>
+      <TouchableOpacity
+        onPress={() => setShowYearModal(true)}
+        style={styles.dropdownField}
+        activeOpacity={0.85}
+      >
+        <View style={styles.dropdownFieldContent}>
+          <View style={styles.dropdownFieldIcon}>
+            <Ionicons name="school-outline" size={18} color="#581845" />
+          </View>
+          <Text
+            numberOfLines={1}
+            style={[styles.dropdownValueText, !graduationYear && styles.dropdownPlaceholderText]}
+          >
+            {graduationYear || 'Select your graduation year'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-down" size={18} color="#7b5873" />
       </TouchableOpacity>
 
-      {showYearModal && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <ScrollView style={{ maxHeight: 300 }}>
-              {availableYears.map((year) => (
+      <Modal
+        isVisible={showYearModal}
+        onBackdropPress={() => setShowYearModal(false)}
+        onBackButtonPress={() => setShowYearModal(false)}
+        style={styles.dropdownModal}
+        backdropOpacity={0.35}
+        useNativeDriver
+        useNativeDriverForBackdrop
+        statusBarTranslucent
+      >
+        <View style={styles.dropdownCard}>
+          <View style={styles.dropdownHeader}>
+            <Text style={styles.dropdownTitle}>Select Graduation Year</Text>
+            <TouchableOpacity
+              onPress={() => setShowYearModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={22} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={styles.dropdownList}
+            contentContainerStyle={styles.yearGrid}
+            showsVerticalScrollIndicator={false}
+          >
+            {availableYears.map((year) => {
+              const selected = year === graduationYear;
+
+              return (
                 <TouchableOpacity
                   key={year}
                   onPress={() => {
                     setGraduationYear(year);
                     setShowYearModal(false);
                   }}
-                  style={styles.yearItem}
+                  style={[styles.yearChip, selected && styles.yearChipSelected]}
+                  activeOpacity={0.85}
                 >
-                  <Text style={styles.yearText}>{year}</Text>
+                  <Text style={[styles.yearChipText, selected && styles.yearChipTextSelected]}>
+                    {year}
+                  </Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
+              );
+            })}
+          </ScrollView>
         </View>
-      )}
+      </Modal>
 
 
 
@@ -1076,53 +1234,135 @@ const handleDeleteAccount = async () => {
 
       <Text style={styles.label}>Industry <Text style={styles.required}>*</Text></Text>
       <TouchableOpacity
-        style={styles.input}
+        style={styles.industryTrigger}
         onPress={() => setShowIndustryPicker(true)}
+        activeOpacity={0.85}
       >
-        <Text style={{ color: industry ? '#000' : '#999' }}>
-          {industry || 'Select your industry'}
-        </Text>
+        <View style={styles.industryTriggerContent}>
+          <View style={styles.industryTriggerIcon}>
+            {selectedIndustryOption ? (
+              <Text style={styles.dropdownEmoji}>{selectedIndustryOption.icon}</Text>
+            ) : (
+              <Ionicons name="briefcase-outline" size={18} color="#581845" />
+            )}
+          </View>
+          <View style={styles.industryTriggerTextWrap}>
+            <Text style={styles.industryTriggerEyebrow}>Professional focus</Text>
+            <Text
+              numberOfLines={1}
+              style={[styles.industryTriggerValue, !industry && styles.industryTriggerPlaceholder]}
+            >
+              {selectedIndustryOption?.label || industry || 'Select your industry'}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.industryTriggerChevron}>
+          <Ionicons name="chevron-down" size={18} color="#7b5873" />
+        </View>
       </TouchableOpacity>
 
 
-      {showIndustryPicker && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <TextInput
-              style={[styles.input, { marginBottom: 10 }]}
-              placeholder="Search industry..."
-              value={industrySearch}
-              onChangeText={setIndustrySearch}
-            />
+      <Modal
+        isVisible={showIndustryPicker}
+        onBackdropPress={() => {
+          setShowIndustryPicker(false);
+          setIndustrySearch('');
+        }}
+        onBackButtonPress={() => {
+          setShowIndustryPicker(false);
+          setIndustrySearch('');
+        }}
+        style={styles.industryModal}
+        backdropOpacity={0.35}
+        useNativeDriver
+        useNativeDriverForBackdrop
+        statusBarTranslucent
+        avoidKeyboard
+      >
+        <View style={styles.industrySheet}>
+          <View style={styles.industryHandle} />
 
-            <ScrollView style={{ maxHeight: 300 }}>
-              {filteredIndustries.map((option, index) => (
-                <TouchableOpacity
-                  key={index}
-                  style={styles.modalOption}
-                  onPress={() => {
-                    setIndustry(option);
-                    setShowIndustryPicker(false);
-                    setIndustrySearch('');
-                  }}
-                >
-                  <Text style={styles.modalOptionText}>{option}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
+          <View style={styles.industrySheetHeader}>
+            <View style={styles.industrySheetHeaderTextWrap}>
+              <Text style={styles.industrySheetTitle}>Choose your industry</Text>
+              <Text style={styles.industrySheetSubtitle}>
+                This helps shape how your profile is presented.
+              </Text>
+            </View>
             <TouchableOpacity
               onPress={() => {
                 setShowIndustryPicker(false);
                 setIndustrySearch('');
               }}
-              style={styles.modalCancel}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Ionicons name="close" size={22} color="#333" />
             </TouchableOpacity>
           </View>
+
+          <View style={styles.industrySearchRow}>
+            <Ionicons name="search" size={18} color="#888" style={{ marginHorizontal: 8 }} />
+            <TextInput
+              style={styles.industrySearchInput}
+              placeholder="Search industry..."
+              value={industrySearch}
+              onChangeText={setIndustrySearch}
+              autoCorrect={false}
+              autoCapitalize="words"
+              keyboardAppearance="light"
+              returnKeyType="search"
+              autoFocus
+            />
+          </View>
+
+          <ScrollView
+            style={styles.industryList}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.industryListContent}
+          >
+            {filteredIndustries.map((option) => {
+              const selected = option.label === industry || `${option.icon} ${option.label}` === industry;
+
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.industryOption, selected && styles.industryOptionSelected]}
+                  onPress={() => {
+                    setIndustry(option.label);
+                    setShowIndustryPicker(false);
+                    setIndustrySearch('');
+                  }}
+                >
+                  <View style={styles.industryOptionContent}>
+                    <View style={[styles.industryOptionIcon, selected && styles.industryOptionIconSelected]}>
+                      <Text style={styles.dropdownEmoji}>{option.icon}</Text>
+                    </View>
+                    <View style={styles.industryOptionTextWrap}>
+                      <Text style={[styles.industryOptionTitle, selected && styles.industryOptionTitleSelected]}>
+                        {option.label}
+                      </Text>
+                      <Text style={[styles.industryOptionMeta, selected && styles.industryOptionMetaSelected]}>
+                        {selected ? 'Selected industry' : 'Tap to choose'}
+                      </Text>
+                    </View>
+                  </View>
+                  {selected ? (
+                    <View style={styles.industryOptionCheck}>
+                      <Ionicons name="checkmark" size={14} color="#fff" />
+                    </View>
+                  ) : (
+                    <Ionicons name="chevron-forward" size={16} color="#b0a1ab" />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+
+            {filteredIndustries.length === 0 && (
+              <Text style={styles.industryEmpty}>No industry matches your search.</Text>
+            )}
+          </ScrollView>
         </View>
-      )}
+      </Modal>
 
 
 
@@ -1205,7 +1445,9 @@ const handleDeleteAccount = async () => {
         ))}
       </View>
 
-      {/* ═══════ SETTINGS CARDS ═══════ */}
+      {/* ═══════ SETTINGS CARDS — only shown after profile is complete ═══════ */}
+      {!isProfileForced && (
+      <>
       <Text style={styles.sectionLabel}>Settings</Text>
 
       {/* Recovery Email Section */}
@@ -1363,6 +1605,8 @@ const handleDeleteAccount = async () => {
         </View>
       </View>
       )}
+      </>
+      )}{/* end !isProfileForced settings gate */}
 
       <TouchableOpacity
         style={[styles.saveButton, !hasChanges && !loading && styles.saveButtonDisabled]}
@@ -1378,74 +1622,112 @@ const handleDeleteAccount = async () => {
 
 
       {/* ===== Danger Zone ===== */}
-<View style={{ marginTop: 10, marginBottom:30, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#eee' }}>
-  <Text style={{ fontSize: 16, fontWeight: '700', color: '#b00020', marginBottom: 8 }}>
-    Danger Zone
+<View style={dangerStyles.section}>
+  <View style={dangerStyles.sectionHeader}>
+    <MaterialCommunityIcons name="shield-alert-outline" size={18} color="#b00020" />
+    <Text style={dangerStyles.sectionTitle}>Danger Zone</Text>
+  </View>
+  <Text style={dangerStyles.sectionSubtitle}>
+    Permanently delete your account and all associated data. This cannot be undone.
   </Text>
-  <Text style={{ color: '#555', marginBottom: 12 }}>
-    Permanently delete your account and all associated data.
-  </Text>
-
   <TouchableOpacity
+    activeOpacity={0.85}
     onPress={() => setShowDeleteModal(true)}
-    style={{
-      backgroundColor: '#b00020',
-      paddingVertical: 14,
-      borderRadius: 10,
-      alignItems: 'center'
-    }}
+    style={dangerStyles.deleteButton}
   >
-    <Text style={{ color: '#fff', fontWeight: '700' }}>Delete Account</Text>
+    <MaterialCommunityIcons name="delete-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+    <Text style={dangerStyles.deleteButtonText}>Delete My Account</Text>
   </TouchableOpacity>
 </View>
 
-{/* Delete confirmation modal */}
+{/* Delete confirmation bottom sheet */}
 <Modal
   isVisible={showDeleteModal}
   onBackdropPress={() => !deleting && setShowDeleteModal(false)}
   onBackButtonPress={() => !deleting && setShowDeleteModal(false)}
-  style={{ justifyContent: 'center', margin: 0 }}
+  style={{ justifyContent: 'flex-end', margin: 0 }}
   useNativeDriver
   useNativeDriverForBackdrop
-  backdropOpacity={0.35}
+  backdropOpacity={0.5}
+  backdropColor="#000"
+  swipeDirection={deleting ? undefined : 'down'}
+  onSwipeComplete={() => !deleting && setShowDeleteModal(false)}
+  propagateSwipe
 >
-  <View style={{ backgroundColor:'#fff', marginHorizontal:20, borderRadius:12, padding:16 }}>
-    <Text style={{ fontSize:18, fontWeight:'700', marginBottom:6 }}>Delete Account?</Text>
-    <Text style={{ color:'#555' }}>
-      This action is permanent and cannot be undone. To confirm, type <Text style={{ fontWeight:'700' }}>DELETE</Text> below.
+  <View style={dangerStyles.sheet}>
+    {/* drag handle */}
+    <View style={dangerStyles.dragHandle} />
+
+    {/* icon + heading */}
+    <View style={dangerStyles.sheetIconWrap}>
+      <LinearGradient
+        colors={['#ff4040', '#b00020']}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={dangerStyles.sheetIconCircle}
+      >
+        <MaterialCommunityIcons name="trash-can-outline" size={28} color="#fff" />
+      </LinearGradient>
+    </View>
+    <Text style={dangerStyles.sheetTitle}>Delete Account?</Text>
+    <Text style={dangerStyles.sheetBody}>
+      This will permanently erase your profile, posts, and all data.{`\n`}There is <Text style={{ fontWeight: '800', color: '#b00020' }}>no recovery</Text> after this.
     </Text>
 
-    <TextInput
-      style={[styles.input, { marginTop: 12 }]}
-      value={confirmDeleteText}
-      onChangeText={setConfirmDeleteText}
-      placeholder="Type DELETE to confirm"
-      autoCapitalize="characters"
-      autoCorrect={false}
-    />
+    {/* confirmation input */}
+    <View style={dangerStyles.inputWrapper}>
+      <TextInput
+        style={dangerStyles.confirmInput}
+        value={confirmDeleteText}
+        onChangeText={setConfirmDeleteText}
+        placeholder="Type DELETE to confirm"
+        placeholderTextColor="#aaa"
+        autoCapitalize="characters"
+        autoCorrect={false}
+        editable={!deleting}
+      />
+    </View>
 
-    <View style={{ flexDirection:'row', justifyContent:'flex-end', gap:10, marginTop:14 }}>
+    {/* actions */}
+    <View style={dangerStyles.sheetActions}>
       <TouchableOpacity
         disabled={deleting}
-        onPress={() => setShowDeleteModal(false)}
-        style={{ paddingVertical:12, paddingHorizontal:16, borderRadius:8, backgroundColor:'#eee' }}
+        onPress={() => { setShowDeleteModal(false); setConfirmDeleteText(''); }}
+        style={dangerStyles.cancelBtn}
+        activeOpacity={0.8}
       >
-        <Text style={{ fontWeight:'600', color:'#333' }}>Cancel</Text>
+        <Text style={dangerStyles.cancelBtnText}>Cancel</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         disabled={confirmDeleteText.trim().toUpperCase() !== 'DELETE' || deleting}
         onPress={handleDeleteAccount}
-        style={{
-          paddingVertical:12, paddingHorizontal:16, borderRadius:8,
-          backgroundColor: (confirmDeleteText.trim().toUpperCase() === 'DELETE' ? '#b00020' : '#e9a8b1')
-        }}
+        activeOpacity={0.85}
+        style={{ flex: 1 }}
       >
-        <Text style={{ fontWeight:'700', color:'#fff' }}>
-          {deleting ? 'Deleting…' : 'Confirm'}
-        </Text>
+        <LinearGradient
+          colors={
+            confirmDeleteText.trim().toUpperCase() === 'DELETE'
+              ? ['#ff4040', '#b00020']
+              : ['#f0a0a0', '#e0c0c0']
+          }
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={dangerStyles.confirmBtn}
+        >
+          {deleting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="trash-can" size={16} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={dangerStyles.confirmBtnText}>Delete Forever</Text>
+            </>
+          )}
+        </LinearGradient>
       </TouchableOpacity>
     </View>
+
+    <Text style={dangerStyles.warningFooter}>
+      You will be signed out immediately after deletion.
+    </Text>
   </View>
 </Modal>
 
@@ -1457,6 +1739,158 @@ const handleDeleteAccount = async () => {
 
 export default EditProfileScreen;
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const dangerStyles = StyleSheet.create({
+  section: {
+    marginTop: 10,
+    marginBottom: 30,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#fce4e4',
+    backgroundColor: '#fff9f9',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#b00020',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    color: '#777',
+    lineHeight: 19,
+    marginBottom: 16,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#b00020',
+    paddingVertical: 14,
+    borderRadius: 12,
+    shadowColor: '#b00020',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  deleteButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+    letterSpacing: 0.2,
+  },
+  // Bottom sheet
+  sheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  dragHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 20,
+  },
+  sheetIconWrap: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sheetIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetTitle: {
+    textAlign: 'center',
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  sheetBody: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 21,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  inputWrapper: {
+    borderWidth: 1.5,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    backgroundColor: '#fafafa',
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  confirmInput: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#1a1a1a',
+    letterSpacing: 1,
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 15,
+    borderRadius: 12,
+    backgroundColor: '#f2f2f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontWeight: '600',
+    color: '#444',
+    fontSize: 15,
+  },
+  confirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 15,
+    borderRadius: 12,
+  },
+  confirmBtnText: {
+    fontWeight: '700',
+    color: '#fff',
+    fontSize: 15,
+  },
+  warningFooter: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: '#aaa',
+    letterSpacing: 0.1,
+  },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, backgroundColor: '#fff', marginTop: 20, },
@@ -1526,6 +1960,62 @@ bannerText: {
   color: 'rgba(255,255,255,0.9)',
   fontSize: 13,
   lineHeight: 18,
+},
+
+// ─── Modern completion progress card ───
+progressCard: {
+  backgroundColor: '#581845',
+  borderRadius: 16,
+  padding: 16,
+  marginTop: 12,
+  marginBottom: 8,
+},
+progressCardTop: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  marginBottom: 10,
+},
+progressCardTitle: {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '700',
+  marginBottom: 1,
+},
+progressCardSubtitle: {
+  color: 'rgba(255,255,255,0.75)',
+  fontSize: 12,
+},
+progressPercent: {
+  color: '#fff',
+  fontSize: 20,
+  fontWeight: '800',
+  marginLeft: 8,
+},
+progressDoneCircle: {
+  width: 32,
+  height: 32,
+  borderRadius: 16,
+  backgroundColor: '#27ae60',
+  alignItems: 'center',
+  justifyContent: 'center',
+  marginLeft: 8,
+},
+progressTrack: {
+  height: 6,
+  backgroundColor: 'rgba(255,255,255,0.25)',
+  borderRadius: 3,
+  overflow: 'hidden',
+  marginBottom: 10,
+},
+progressFill: {
+  height: 6,
+  backgroundColor: '#fff',
+  borderRadius: 3,
+},
+progressMissing: {
+  color: 'rgba(255,255,255,0.8)',
+  fontSize: 12,
+  lineHeight: 17,
 },
 
 
@@ -1609,6 +2099,111 @@ bannerText: {
     padding: 12,
     fontSize: 16,
     justifyContent: 'center'
+  },
+  dropdownField: {
+    borderWidth: 1,
+    borderColor: '#d9c5d4',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fcf9fb',
+    shadowColor: '#581845',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  dropdownFieldContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  dropdownFieldIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f3e7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  dropdownEmoji: {
+    fontSize: 14,
+  },
+  dropdownValueText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f1f1f',
+    fontWeight: '500',
+  },
+  dropdownPlaceholderText: {
+    color: '#8d8692',
+    fontWeight: '400',
+  },
+  industryTrigger: {
+    borderWidth: 1,
+    borderColor: '#d9c5d4',
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fcf9fb',
+    shadowColor: '#581845',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  industryTriggerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  industryTriggerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f3e7ef',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  industryTriggerTextWrap: {
+    flex: 1,
+  },
+  industryTriggerEyebrow: {
+    fontSize: 12,
+    color: '#7d6578',
+    marginBottom: 3,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  industryTriggerValue: {
+    fontSize: 16,
+    color: '#1f1f1f',
+    fontWeight: '600',
+  },
+  industryTriggerPlaceholder: {
+    color: '#8d8692',
+    fontWeight: '400',
+  },
+  industryTriggerChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f7f1f5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   textArea: {
     height: 120,
@@ -1946,6 +2541,276 @@ bannerText: {
     textAlign: 'center',
     paddingVertical: 16,
     color: '#888',
+  },
+  dropdownModal: {
+    margin: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dropdownCard: {
+    width: '88%',
+    maxHeight: '70%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ece7eb',
+  },
+  dropdownTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  dropdownSearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 14,
+    marginTop: 14,
+    marginBottom: 10,
+    backgroundColor: '#f6f3f5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#efe6ec',
+    height: 48,
+  },
+  dropdownSearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f1f1f',
+    paddingRight: 12,
+  },
+  dropdownList: {
+    maxHeight: 360,
+  },
+  dropdownListContent: {
+    paddingHorizontal: 8,
+    paddingBottom: 10,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 14,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#f0e6ec',
+    backgroundColor: '#fff',
+  },
+  dropdownItemSelected: {
+    borderColor: '#581845',
+    backgroundColor: '#f8eef5',
+  },
+  dropdownItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  dropdownOptionIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f6f3f5',
+    marginRight: 12,
+  },
+  dropdownItemText: {
+    flex: 1,
+    fontSize: 15,
+    color: '#222',
+  },
+  dropdownItemTextSelected: {
+    color: '#581845',
+    fontWeight: '700',
+  },
+  dropdownEmpty: {
+    textAlign: 'center',
+    color: '#8d8692',
+    paddingVertical: 22,
+    fontSize: 14,
+  },
+  industryModal: {
+    margin: 0,
+    justifyContent: 'flex-end',
+  },
+  industrySheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 10,
+    paddingBottom: 24,
+    paddingHorizontal: 16,
+    minHeight: 430,
+    maxHeight: '78%',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -6 },
+    elevation: 18,
+  },
+  industryHandle: {
+    alignSelf: 'center',
+    width: 46,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#dbcdd6',
+    marginBottom: 14,
+  },
+  industrySheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  industrySheetHeaderTextWrap: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  industrySheetTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  industrySheetSubtitle: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#7d6578',
+  },
+  industrySearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f6f3f5',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#efe6ec',
+    height: 50,
+    marginBottom: 14,
+  },
+  industrySearchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f1f1f',
+    paddingRight: 14,
+  },
+  industryList: {
+    flex: 1,
+  },
+  industryListContent: {
+    paddingBottom: 14,
+  },
+  industryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 16,
+    marginBottom: 8,
+    backgroundColor: '#fcfafb',
+    borderWidth: 1,
+    borderColor: '#efe6ec',
+  },
+  industryOptionSelected: {
+    backgroundColor: '#f8eef5',
+    borderColor: '#581845',
+  },
+  industryOptionContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  industryOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3e7ef',
+    marginRight: 12,
+  },
+  industryOptionIconSelected: {
+    backgroundColor: '#f1d9ea',
+  },
+  industryOptionTextWrap: {
+    flex: 1,
+  },
+  industryOptionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 2,
+  },
+  industryOptionTitleSelected: {
+    color: '#581845',
+  },
+  industryOptionMeta: {
+    fontSize: 12,
+    color: '#8d8692',
+  },
+  industryOptionMetaSelected: {
+    color: '#7d6578',
+  },
+  industryOptionCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#581845',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  industryEmpty: {
+    textAlign: 'center',
+    color: '#8d8692',
+    paddingVertical: 22,
+    fontSize: 14,
+  },
+  yearGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  yearChip: {
+    width: '30%',
+    minWidth: 88,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#f7f4f6',
+    borderWidth: 1,
+    borderColor: '#ece2e8',
+  },
+  yearChipSelected: {
+    backgroundColor: '#581845',
+    borderColor: '#581845',
+  },
+  yearChipText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+  },
+  yearChipTextSelected: {
+    color: '#fff',
   },
 
   dobModal: {

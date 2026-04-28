@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,12 @@ import {
   StatusBar,
   Animated,
   Vibration,
+  FlatList,
+  TextInput,
+  ActivityIndicator,
+  ActionSheetIOS,
+  ScrollView,
+  Modal,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +24,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { socket } from '../socket';
 import { AuthContext } from '../context/AuthContext';
 import { Audio } from 'expo-av';
+import api from '../services/api';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -64,6 +71,19 @@ const ICE_SERVERS = {
 const CALL_TIMEOUT = 45000; // 45 seconds ring timeout
 const RECONNECT_TIMEOUT = 30000; // 30 seconds reconnect window
 
+// ─── Audio output modes ───────────────────────────────────────────────────
+const AUDIO_OUTPUT = {
+  EARPIECE:  'earpiece',
+  SPEAKER:   'speaker',
+  BLUETOOTH: 'bluetooth',
+};
+
+const AUDIO_OUTPUT_META = {
+  earpiece:  { label: 'Earpiece',  icon: 'phone-portrait-outline' },
+  speaker:   { label: 'Speaker',   icon: 'volume-high' },
+  bluetooth: { label: 'Bluetooth', icon: 'bluetooth' },
+};
+
 const CallScreen = ({ route, navigation }) => {
   const insets = useSafeAreaInsets();
   const { userId, user } = useContext(AuthContext);
@@ -78,6 +98,10 @@ const CallScreen = ({ route, navigation }) => {
     calleeId,
     calleeName,
     calleePhoto,
+    // Conference params (set when joining an existing call)
+    isConference = false,
+    conferenceId: routeConfId = null,
+    existingParticipants = [],
   } = route.params || {};
 
   const isInitiator = !isIncoming;
@@ -90,15 +114,32 @@ const CallScreen = ({ route, navigation }) => {
   const [localStream, setLocalStream] = useState(null);
   const [remoteStream, setRemoteStream] = useState(null);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeakerOn, setIsSpeakerOn] = useState(callType === 'video');
+  // audioOutput: replaces the old boolean isSpeakerOn
+  const [audioOutput, setAudioOutput] = useState(
+    callType === 'video' ? AUDIO_OUTPUT.SPEAKER : AUDIO_OUTPUT.EARPIECE
+  );
+  const [showAudioPicker, setShowAudioPicker] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(callType === 'video');
   const [isFrontCamera, setIsFrontCamera] = useState(true);
   const [callDuration, setCallDuration] = useState(0);
   const [isRemoteVideoEnabled, setIsRemoteVideoEnabled] = useState(true);
   const [endReason, setEndReason] = useState('');
 
+  // Conference participants state
+  // Each entry: { id, name, photo, stream, muted, videoEnabled, connected, calling }
+  const [participants, setParticipants] = useState([]);
+  const [showAddPeople, setShowAddPeople] = useState(false);
+  const [myConnections, setMyConnections] = useState([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionSearch, setConnectionSearch] = useState('');
+
   // Refs
-  const peerConnectionRef = useRef(null);
+  const peerConnectionRef = useRef(null);             // 1:1 primary peer connection
+  const confPeerConnectionsRef = useRef(new Map());   // conference: Map<userId, RTCPeerConnection>
+  const localStreamRef = useRef(null);                // always-current local stream ref
+  const conferenceIdRef = useRef(                     // unique ID for this conference room
+    routeConfId || `conf_${Date.now()}_${userId}`
+  );
   const callTimerRef = useRef(null);
   const ringtoneRef = useRef(null);
   const callTimeoutRef = useRef(null);
@@ -138,6 +179,14 @@ const CallScreen = ({ route, navigation }) => {
     socket.on('call:audio-toggled', ({ audioEnabled }) => {});
     socket.on('call:busy', handleBusy);
     socket.on('call:unavailable', handleUnavailable);
+    // Conference events
+    socket.on('call:invite:accepted',        handleInviteAccepted);
+    socket.on('call:participant:joined',     handleParticipantJoined);
+    socket.on('call:participant:left',       handleParticipantLeft);
+    socket.on('call:conference:offer',       handleConferenceOffer);
+    socket.on('call:conference:answer',      handleConferenceAnswer);
+    socket.on('call:conference:ice-candidate', handleConferenceIce);
+    socket.on('call:conference:peer:ready',  handleConferencePeerReady);
 
     if (RTCPeerConnection) {
       setupCall();
@@ -160,6 +209,13 @@ const CallScreen = ({ route, navigation }) => {
       socket.off('call:audio-toggled');
       socket.off('call:busy');
       socket.off('call:unavailable');
+      socket.off('call:invite:accepted');
+      socket.off('call:participant:joined');
+      socket.off('call:participant:left');
+      socket.off('call:conference:offer');
+      socket.off('call:conference:answer');
+      socket.off('call:conference:ice-candidate');
+      socket.off('call:conference:peer:ready');
       cleanup();
     };
   }, []);
@@ -247,8 +303,83 @@ const CallScreen = ({ route, navigation }) => {
   }, [callState]);
 
   // ═══════════════════════════════════════════════════════════════
-  // AUDIO CONFIGURATION
+  // AUDIO OUTPUT ROUTING
   // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Apply an audio output mode.
+   * iOS: leverages AVAudioSession.  Speaker = overrideOutputAudioPort(.speaker).
+   *      Bluetooth / Earpiece = let OS pick automatically (prefers BT if connected).
+   * Android: playThroughEarpieceAndroid controls earpiece vs speaker/BT.
+   */
+  const applyAudioOutput = useCallback(async (mode) => {
+    try {
+      switch (mode) {
+        case AUDIO_OUTPUT.EARPIECE:
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            playThroughEarpieceAndroid: true,
+            shouldDuckAndroid: false,
+          });
+          break;
+        case AUDIO_OUTPUT.SPEAKER:
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            playThroughEarpieceAndroid: false,
+            shouldDuckAndroid: false,
+          });
+          break;
+        case AUDIO_OUTPUT.BLUETOOTH:
+          // Set to non-earpiece so the OS routes to either BT or speaker.
+          // If a BT audio device is connected the OS will prefer it over the speaker.
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: true,
+            playThroughEarpieceAndroid: false,
+            shouldDuckAndroid: false,
+          });
+          break;
+      }
+      setAudioOutput(mode);
+    } catch (error) {
+      console.error('Audio output routing error:', error);
+    }
+  }, []);
+
+  /**
+   * Show a native ActionSheet (iOS) or custom modal (Android) to pick audio output.
+   * Long-pressing the speaker button triggers this; tapping cycles modes.
+   */
+  const openAudioOutputPicker = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: 'Audio Output',
+          options: ['Cancel', '📱 Earpiece', '🔊 Speaker', '🎧 Bluetooth'],
+          cancelButtonIndex: 0,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) applyAudioOutput(AUDIO_OUTPUT.EARPIECE);
+          else if (buttonIndex === 2) applyAudioOutput(AUDIO_OUTPUT.SPEAKER);
+          else if (buttonIndex === 3) applyAudioOutput(AUDIO_OUTPUT.BLUETOOTH);
+        }
+      );
+    } else {
+      setShowAudioPicker(true);
+    }
+  }, [applyAudioOutput]);
+
+  /** Tap: cycle through earpiece → speaker → bluetooth */
+  const cycleAudioOutput = useCallback(() => {
+    const order = [AUDIO_OUTPUT.EARPIECE, AUDIO_OUTPUT.SPEAKER, AUDIO_OUTPUT.BLUETOOTH];
+    const nextMode = order[(order.indexOf(audioOutput) + 1) % order.length];
+    applyAudioOutput(nextMode);
+  }, [audioOutput, applyAudioOutput]);
 
   const configureAudio = async () => {
     try {
@@ -257,7 +388,7 @@ const CallScreen = ({ route, navigation }) => {
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         playThroughEarpieceAndroid: callType === 'audio',
-        shouldDuckAndroid: true,
+        shouldDuckAndroid: false,
       });
     } catch (error) {
       console.log('Audio config error:', error);
@@ -281,6 +412,7 @@ const CallScreen = ({ route, navigation }) => {
       });
 
       setLocalStream(stream);
+      localStreamRef.current = stream; // always-current ref for conference track sharing
 
       const pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnectionRef.current = pc;
@@ -505,10 +637,25 @@ const CallScreen = ({ route, navigation }) => {
     stopRingtone();
     Vibration.cancel();
 
-    socket.emit('call:accept', {
-      callerId: remoteUserId,
-      calleeId: userId,
-    });
+    if (isConference) {
+      // Conference invite: don't use the normal 1:1 call:accept path.
+      // Announce acceptance to the inviter + all existing participants.
+      socket.emit('call:invite:accept', {
+        conferenceId:   conferenceIdRef.current,
+        accepterId:     userId,
+        accepterName:   [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown',
+        accepterPhoto:  user?.photos?.[0] || null,
+        inviterId:      callerId,
+        participantIds: existingParticipants.map(p => p.id),
+      });
+      // Establish peer links to everyone already on the call
+      connectToExistingParticipants();
+    } else {
+      socket.emit('call:accept', {
+        callerId: remoteUserId,
+        calleeId: userId,
+      });
+    }
   };
 
   const rejectCall = () => {
@@ -526,9 +673,23 @@ const CallScreen = ({ route, navigation }) => {
   };
 
   const endCall = () => {
+    if (participants.length > 0) {
+      // Conference: notify everyone we're leaving
+      const remainingIds = [
+        remoteUserId,
+        ...participants.map(p => p.id),
+      ].filter(id => id && id !== userId);
+
+      socket.emit('call:participant:left', {
+        conferenceId:         conferenceIdRef.current,
+        leaverId:             userId,
+        remainingParticipantIds: remainingIds,
+      });
+    }
+    // Always send 1:1 end to the primary peer for backward-compat
     socket.emit('call:end', {
-      peerId: remoteUserId,
-      endedBy: userId,
+      peerId:   remoteUserId,
+      endedBy:  userId,
     });
 
     setEndReason('Call ended');
@@ -549,20 +710,7 @@ const CallScreen = ({ route, navigation }) => {
     }
   };
 
-  const toggleSpeaker = async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: true,
-        playThroughEarpieceAndroid: isSpeakerOn,
-        shouldDuckAndroid: true,
-      });
-      setIsSpeakerOn(!isSpeakerOn);
-    } catch (error) {
-      console.error('Error toggling speaker:', error);
-    }
-  };
+  const toggleSpeaker = () => cycleAudioOutput();
 
   const toggleVideo = () => {
     if (localStream) {
@@ -586,6 +734,244 @@ const CallScreen = ({ route, navigation }) => {
       setIsFrontCamera(!isFrontCamera);
     }
   };
+
+  // ═══════════════════════════════════════════════════════════════
+  // CONFERENCE CALL — MESH WebRTC
+  // Each remote participant gets its own RTCPeerConnection stored in
+  // confPeerConnectionsRef (Map<userId, RTCPeerConnection>).
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Create (or retrieve existing) peer connection to a conference participant.
+   * @param {string} participantId  Remote user ID
+   * @param {boolean} asInitiator  true = we create the SDP offer
+   */
+  const createConferencePeerConnection = useCallback(async (participantId, asInitiator) => {
+    if (!RTCPeerConnection) return null;
+
+    // Reuse if already exists
+    if (confPeerConnectionsRef.current.has(participantId)) {
+      return confPeerConnectionsRef.current.get(participantId);
+    }
+
+    const pc = new RTCPeerConnection(ICE_SERVERS);
+    confPeerConnectionsRef.current.set(participantId, pc);
+
+    // Share local tracks with this participant
+    const stream = localStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    }
+
+    // Receive remote stream
+    pc.ontrack = (event) => {
+      if (event.streams?.[0]) {
+        const remoteS = event.streams[0];
+        setParticipants(prev =>
+          prev.map(p => p.id === participantId ? { ...p, stream: remoteS, connected: true } : p)
+        );
+      }
+    };
+
+    // Relay ICE candidates
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('call:conference:ice-candidate', {
+          targetId: participantId,
+          fromId: userId,
+          candidate: event.candidate,
+          conferenceId: conferenceIdRef.current,
+        });
+      }
+    };
+
+    // Connection state
+    pc.onconnectionstatechange = () => {
+      if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
+        setParticipants(prev =>
+          prev.map(p => p.id === participantId ? { ...p, connected: false } : p)
+        );
+      }
+    };
+
+    if (asInitiator) {
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('call:conference:offer', {
+          targetId: participantId,
+          fromId: userId,
+          offer,
+          conferenceId: conferenceIdRef.current,
+        });
+      } catch (err) {
+        console.error('Conference offer error:', err);
+      }
+    }
+
+    return pc;
+  }, [userId]);
+
+  // ─── Conference event handlers ────────────────────────────────
+
+  /** Someone we invited accepted the call */
+  const handleInviteAccepted = useCallback(async ({ accepterId, accepterName, accepterPhoto }) => {
+    setParticipants(prev => {
+      const exists = prev.find(p => p.id === accepterId);
+      if (!exists) {
+        return [...prev, {
+          id: accepterId, name: accepterName, photo: accepterPhoto,
+          stream: null, muted: false, videoEnabled: true, connected: false, calling: false,
+        }];
+      }
+      return prev.map(p => p.id === accepterId ? { ...p, calling: false } : p);
+    });
+    // We're the initiator for the new peer connection
+    await createConferencePeerConnection(accepterId, true);
+  }, [createConferencePeerConnection]);
+
+  /** An existing participant's backend relay: new person joined */
+  const handleParticipantJoined = useCallback(async ({ participantId, participantName, participantPhoto }) => {
+    setParticipants(prev => {
+      if (prev.find(p => p.id === participantId)) return prev;
+      return [...prev, {
+        id: participantId, name: participantName, photo: participantPhoto,
+        stream: null, muted: false, videoEnabled: true, connected: false, calling: false,
+      }];
+    });
+    // We initiate the connection to the new participant
+    await createConferencePeerConnection(participantId, true);
+  }, [createConferencePeerConnection]);
+
+  /** Someone left the conference */
+  const handleParticipantLeft = useCallback(({ leaverId }) => {
+    const pc = confPeerConnectionsRef.current.get(leaverId);
+    if (pc) { try { pc.close(); } catch {} confPeerConnectionsRef.current.delete(leaverId); }
+    setParticipants(prev => prev.filter(p => p.id !== leaverId));
+  }, []);
+
+  /** Receive SDP offer from a conference peer */
+  const handleConferenceOffer = useCallback(async ({ fromId, offer, conferenceId }) => {
+    if (!RTCPeerConnection) return;
+    let pc = confPeerConnectionsRef.current.get(fromId);
+    if (!pc) pc = await createConferencePeerConnection(fromId, false);
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('call:conference:answer', {
+        targetId: fromId, fromId: userId, answer,
+        conferenceId: conferenceIdRef.current,
+      });
+    } catch (err) { console.error('Conference offer handling error:', err); }
+  }, [createConferencePeerConnection, userId]);
+
+  /** Receive SDP answer from a conference peer */
+  const handleConferenceAnswer = useCallback(async ({ fromId, answer }) => {
+    const pc = confPeerConnectionsRef.current.get(fromId);
+    if (pc) {
+      try { await pc.setRemoteDescription(new RTCSessionDescription(answer)); }
+      catch (err) { console.error('Conference answer error:', err); }
+    }
+  }, []);
+
+  /** Receive ICE candidate from a conference peer */
+  const handleConferenceIce = useCallback(async ({ fromId, candidate }) => {
+    const pc = confPeerConnectionsRef.current.get(fromId);
+    if (pc && candidate) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); }
+      catch (err) { console.error('Conference ICE error:', err); }
+    }
+  }, []);
+
+  /**
+   * Existing participants notify us that we should initiate a connection to
+   * the newly joined peer (when joining an already-active conference).
+   */
+  const handleConferencePeerReady = useCallback(async ({ newParticipantId, newParticipantName, newParticipantPhoto }) => {
+    setParticipants(prev => {
+      if (prev.find(p => p.id === newParticipantId)) return prev;
+      return [...prev, {
+        id: newParticipantId, name: newParticipantName, photo: newParticipantPhoto,
+        stream: null, muted: false, videoEnabled: true, connected: false, calling: false,
+      }];
+    });
+    await createConferencePeerConnection(newParticipantId, true);
+  }, [createConferencePeerConnection]);
+
+  /**
+   * Called when joining an existing conference.
+   * Announces presence to all current participants.
+   */
+  const connectToExistingParticipants = useCallback(() => {
+    if (!isConference || existingParticipants.length === 0) return;
+
+    // Pre-populate participant list  
+    setParticipants(existingParticipants.map(p => ({
+      id: p.id, name: p.name, photo: p.photo,
+      stream: null, muted: false, videoEnabled: true, connected: false, calling: false,
+    })));
+
+    // Tell all existing participants we're here → they create offers to us
+    socket.emit('call:conference:joined', {
+      conferenceId: conferenceIdRef.current,
+      joinerId: userId,
+      joinerName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown',
+      joinerPhoto: user?.photos?.[0] || null,
+      participantIds: existingParticipants.map(p => p.id),
+    });
+  }, [isConference, existingParticipants, userId, user]);
+
+  /** Invite a connection from the user's connected list to this call */
+  const inviteToCall = useCallback(async (connection) => {
+    const connId   = connection.id || connection._id;
+    const connName = [connection.firstName, connection.lastName].filter(Boolean).join(' ') || 'Unknown';
+    const connPhoto = connection.photos?.[0] || null;
+
+    // Add with "calling" badge immediately
+    setParticipants(prev => {
+      if (prev.find(p => p.id === connId)) return prev;
+      return [...prev, {
+        id: connId, name: connName, photo: connPhoto,
+        stream: null, muted: false, videoEnabled: true, connected: false, calling: true,
+      }];
+    });
+    setShowAddPeople(false);
+
+    // Build current participant list so invited user can connect to everyone
+    const allCurrentParticipants = [
+      { id: userId, name: [user?.firstName, user?.lastName].filter(Boolean).join(' '), photo: user?.photos?.[0] },
+      { id: remoteUserId, name: remoteName, photo: remotePhoto },
+      ...participants.map(p => ({ id: p.id, name: p.name, photo: p.photo })),
+    ].filter(p => p.id);
+
+    socket.emit('call:invite', {
+      conferenceId: conferenceIdRef.current,
+      inviterId: userId,
+      inviterName: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Unknown',
+      inviterPhoto: user?.photos?.[0] || null,
+      inviteeId: connId,
+      callType,
+      existingParticipants: allCurrentParticipants,
+    });
+  }, [userId, user, remoteUserId, remoteName, remotePhoto, participants, callType]);
+
+  /** Load the user's connected contacts for the Add People picker */
+  const fetchConnections = useCallback(async () => {
+    setConnectionsLoading(true);
+    try {
+      const res = await api.get('/connections');
+      const connected = (res.data?.connections || res.data || []).map(c => {
+        const other = c.requester?._id === userId ? c.target : c.requester;
+        return other || c;
+      }).filter(Boolean);
+      setMyConnections(connected);
+    } catch (err) {
+      console.error('Fetch connections error:', err);
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [userId]);
 
   // ═══════════════════════════════════════════════════════════════
   // RINGTONE & CLEANUP
@@ -634,10 +1020,146 @@ const CallScreen = ({ route, navigation }) => {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+
+    // Close all conference peer connections
+    confPeerConnectionsRef.current.forEach(pc => {
+      try { pc.close(); } catch {}
+    });
+    confPeerConnectionsRef.current.clear();
   };
 
   // ═══════════════════════════════════════════════════════════════
-  // HELPERS
+  // RENDER: ADD PEOPLE MODAL
+  // ═══════════════════════════════════════════════════════════════
+
+  const renderAddPeopleModal = () => {
+    const filtered = myConnections.filter(c => {
+      const name = [c.firstName, c.lastName].filter(Boolean).join(' ').toLowerCase();
+      const inCall = c._id === remoteUserId || participants.some(p => p.id === (c._id || c.id));
+      return name.includes(connectionSearch.toLowerCase()) && !inCall;
+    });
+
+    return (
+      <Modal
+        visible={showAddPeople}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddPeople(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.addPeopleSheet}>
+            {/* Header */}
+            <View style={styles.addPeopleHeader}>
+              <Text style={styles.addPeopleTitle}>Add to call</Text>
+              <TouchableOpacity onPress={() => setShowAddPeople(false)} style={styles.addPeopleClose}>
+                <Ionicons name="close" size={22} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search bar */}
+            <View style={styles.addPeopleSearch}>
+              <Ionicons name="search" size={16} color="#999" style={{ marginRight: 6 }} />
+              <TextInput
+                value={connectionSearch}
+                onChangeText={setConnectionSearch}
+                placeholder="Search connections..."
+                placeholderTextColor="#bbb"
+                style={styles.addPeopleSearchInput}
+                autoCapitalize="none"
+              />
+            </View>
+
+            {connectionsLoading ? (
+              <ActivityIndicator style={{ marginTop: 30 }} color="#581845" />
+            ) : filtered.length === 0 ? (
+              <View style={styles.addPeopleEmpty}>
+                <Ionicons name="people-outline" size={40} color="#ccc" />
+                <Text style={styles.addPeopleEmptyText}>
+                  {connectionSearch ? 'No matches' : 'No connections available'}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filtered}
+                keyExtractor={item => item._id || item.id}
+                contentContainerStyle={{ paddingBottom: 20 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.addPeopleRow}
+                    onPress={() => inviteToCall(item)}
+                    activeOpacity={0.7}
+                  >
+                    {item.photos?.[0] ? (
+                      <Image source={{ uri: item.photos[0] }} style={styles.addPeopleAvatar} />
+                    ) : (
+                      <View style={[styles.addPeopleAvatar, styles.addPeopleAvatarPlaceholder]}>
+                        <Ionicons name="person" size={22} color="#fff" />
+                      </View>
+                    )}
+                    <View style={styles.addPeopleInfo}>
+                      <Text style={styles.addPeopleName}>
+                        {[item.firstName, item.lastName].filter(Boolean).join(' ')}
+                      </Text>
+                      {item.currentRole && (
+                        <Text style={styles.addPeopleRole} numberOfLines={1}>{item.currentRole}</Text>
+                      )}
+                    </View>
+                    <View style={styles.addPeopleCallBtn}>
+                      <Ionicons name="call" size={18} color="#fff" />
+                    </View>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // RENDER: AUDIO OUTPUT PICKER MODAL (Android)
+  // ═══════════════════════════════════════════════════════════════
+
+  const renderAudioPickerModal = () => (
+    <Modal
+      visible={showAudioPicker}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowAudioPicker(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowAudioPicker(false)}
+      >
+        <View style={styles.audioPickerSheet}>
+          <Text style={styles.audioPickerTitle}>Audio Output</Text>
+          {Object.entries(AUDIO_OUTPUT_META).map(([mode, meta]) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.audioPickerRow, audioOutput === mode && styles.audioPickerRowSelected]}
+              onPress={() => { applyAudioOutput(mode); setShowAudioPicker(false); }}
+            >
+              <Ionicons
+                name={meta.icon}
+                size={22}
+                color={audioOutput === mode ? '#581845' : '#333'}
+                style={{ marginRight: 14 }}
+              />
+              <Text style={[styles.audioPickerRowText, audioOutput === mode && { color: '#581845', fontWeight: '700' }]}>
+                {meta.label}
+              </Text>
+              {audioOutput === mode && (
+                <Ionicons name="checkmark" size={20} color="#581845" style={{ marginLeft: 'auto' }} />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
   // ═══════════════════════════════════════════════════════════════
 
   const formatDuration = (seconds) => {
@@ -799,6 +1321,7 @@ const CallScreen = ({ route, navigation }) => {
 
   if (callType === 'video') {
     return (
+      <>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000" translucent />
 
@@ -859,9 +1382,11 @@ const CallScreen = ({ route, navigation }) => {
             <Text style={styles.videoStatusText}>{getStatusText()}</Text>
           </View>
           <View style={styles.topBarRight}>
+            {callState === 'connected' && (
             <TouchableOpacity onPress={switchCamera} style={styles.flipCameraBtn}>
               <Ionicons name="camera-reverse" size={24} color="#fff" />
             </TouchableOpacity>
+          )}
           </View>
         </View>
 
@@ -870,6 +1395,27 @@ const CallScreen = ({ route, navigation }) => {
           colors={['transparent', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.9)']}
           style={[styles.videoControls, { paddingBottom: insets.bottom + 20 }]}
         >
+          {/* Conference participant strip */}
+          {participants.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              style={styles.videoParticipantStrip} contentContainerStyle={styles.participantStripContent}>
+              {participants.map(p => (
+                <View key={p.id} style={styles.participantChip}>
+                  {p.photo ? (
+                    <Image source={{ uri: p.photo }} style={styles.participantChipAvatar} />
+                  ) : (
+                    <View style={[styles.participantChipAvatar, styles.participantAvatarPlaceholder]}>
+                      <Ionicons name="person" size={16} color="rgba(255,255,255,0.7)" />
+                    </View>
+                  )}
+                  {p.calling && <View style={styles.callingBadge}><ActivityIndicator size={8} color="#fff" /></View>}
+                  {p.connected && <View style={styles.connectedBadge} />}
+                  <Text style={styles.participantChipName} numberOfLines={1}>{p.name?.split(' ')[0]}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
           <View style={styles.controlsRow}>
             <TouchableOpacity
               style={[styles.controlBtn, !isVideoEnabled && styles.controlBtnActive]}
@@ -889,19 +1435,35 @@ const CallScreen = ({ route, navigation }) => {
               <Ionicons name="call" size={30} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
             </TouchableOpacity>
 
+            {/* Audio Output cycling button */}
             <TouchableOpacity
-              style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]}
-              onPress={toggleSpeaker}
+              style={[styles.controlBtn, audioOutput !== AUDIO_OUTPUT.EARPIECE && styles.controlBtnActive]}
+              onPress={cycleAudioOutput}
+              onLongPress={openAudioOutputPicker}
+              delayLongPress={400}
             >
-              <Ionicons name={isSpeakerOn ? 'volume-high' : 'volume-low'} size={24} color="#fff" />
+              <Ionicons name={AUDIO_OUTPUT_META[audioOutput]?.icon || 'volume-low'} size={24} color="#fff" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.controlBtn} onPress={switchCamera}>
-              <Ionicons name="camera-reverse" size={24} color="#fff" />
-            </TouchableOpacity>
+            {/* Add People */}
+            {callState === 'connected' ? (
+              <TouchableOpacity
+                style={styles.controlBtn}
+                onPress={() => { fetchConnections(); setShowAddPeople(true); }}
+              >
+                <Ionicons name="person-add" size={24} color="#fff" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={styles.controlBtn} onPress={switchCamera}>
+                <Ionicons name="camera-reverse" size={24} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
         </LinearGradient>
       </View>
+      {renderAddPeopleModal()}
+      {renderAudioPickerModal()}
+      </>
     );
   }
 
@@ -910,6 +1472,7 @@ const CallScreen = ({ route, navigation }) => {
   // ═══════════════════════════════════════════════════════════════
 
   return (
+    <>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
       <LinearGradient
@@ -964,15 +1527,53 @@ const CallScreen = ({ route, navigation }) => {
 
         {/* Bottom controls */}
         <View style={[styles.audioControls, { paddingBottom: insets.bottom + 30 }]}>
+
+          {/* ─── Conference participant avatars ─── */}
+          {participants.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}
+              style={styles.participantStrip} contentContainerStyle={styles.participantStripContent}>
+              {participants.map(p => (
+                <View key={p.id} style={styles.participantChip}>
+                  {p.photo ? (
+                    <Image source={{ uri: p.photo }} style={styles.participantChipAvatar} />
+                  ) : (
+                    <View style={[styles.participantChipAvatar, styles.participantAvatarPlaceholder]}>
+                      <Ionicons name="person" size={16} color="rgba(255,255,255,0.7)" />
+                    </View>
+                  )}
+                  {p.calling && (
+                    <View style={styles.callingBadge}>
+                      <ActivityIndicator size={8} color="#fff" />
+                    </View>
+                  )}
+                  {p.connected && (
+                    <View style={styles.connectedBadge} />
+                  )}
+                  <Text style={styles.participantChipName} numberOfLines={1}>
+                    {p.name?.split(' ')[0]}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          )}
+
           <View style={styles.controlsGrid}>
+            {/* Audio Output (Speaker/BT/Earpiece) */}
             <View style={styles.controlItem}>
               <TouchableOpacity
-                style={[styles.controlBtn, isSpeakerOn && styles.controlBtnActive]}
-                onPress={toggleSpeaker}
+                style={[styles.controlBtn, audioOutput !== AUDIO_OUTPUT.EARPIECE && styles.controlBtnActive]}
+                onPress={cycleAudioOutput}
+                onLongPress={openAudioOutputPicker}
+                delayLongPress={400}
               >
-                <Ionicons name={isSpeakerOn ? 'volume-high' : 'volume-low'} size={24} color="#fff" />
+                <Ionicons
+                  name={AUDIO_OUTPUT_META[audioOutput]?.icon || 'volume-low'}
+                  size={24} color="#fff"
+                />
               </TouchableOpacity>
-              <Text style={styles.controlLabel}>Speaker</Text>
+              <Text style={styles.controlLabel}>
+                {AUDIO_OUTPUT_META[audioOutput]?.label || 'Speaker'}
+              </Text>
             </View>
 
             <View style={styles.controlItem}>
@@ -985,12 +1586,18 @@ const CallScreen = ({ route, navigation }) => {
               <Text style={styles.controlLabel}>{isMuted ? 'Unmute' : 'Mute'}</Text>
             </View>
 
-            <View style={styles.controlItem}>
-              <TouchableOpacity style={styles.controlBtn} onPress={() => {}}>
-                <Ionicons name="keypad" size={24} color="#fff" />
-              </TouchableOpacity>
-              <Text style={styles.controlLabel}>Keypad</Text>
-            </View>
+            {/* Add People (only when connected) */}
+            {callState === 'connected' && (
+              <View style={styles.controlItem}>
+                <TouchableOpacity
+                  style={styles.controlBtn}
+                  onPress={() => { fetchConnections(); setShowAddPeople(true); }}
+                >
+                  <Ionicons name="person-add" size={24} color="#fff" />
+                </TouchableOpacity>
+                <Text style={styles.controlLabel}>Add</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.endCallCenter}>
@@ -1001,6 +1608,9 @@ const CallScreen = ({ route, navigation }) => {
         </View>
       </Animated.View>
     </View>
+    {renderAddPeopleModal()}
+    {renderAudioPickerModal()}
+    </>
   );
 };
 
@@ -1381,6 +1991,190 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#fff',
     fontWeight: '500',
+  },
+
+  // ═══ Conference Participant Strip ═══
+  participantStrip: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+  },
+  videoParticipantStrip: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  participantStripContent: {
+    gap: 12,
+    paddingHorizontal: 4,
+  },
+  participantChip: {
+    alignItems: 'center',
+    width: 58,
+  },
+  participantChipAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  participantAvatarPlaceholder: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  participantChipName: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 11,
+    marginTop: 5,
+    fontWeight: '500',
+  },
+  callingBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectedBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22c55e',
+    borderWidth: 1.5,
+    borderColor: '#1a1a2e',
+  },
+
+  // ═══ Add People Modal ═══
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  addPeopleSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 30,
+    maxHeight: '75%',
+  },
+  addPeopleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  addPeopleTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a2e',
+  },
+  addPeopleClose: {
+    padding: 4,
+  },
+  addPeopleSearch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  addPeopleSearchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#1a1a2e',
+  },
+  addPeopleEmpty: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 10,
+  },
+  addPeopleEmptyText: {
+    color: '#999',
+    fontSize: 15,
+  },
+  addPeopleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 14,
+  },
+  addPeopleAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+  },
+  addPeopleAvatarPlaceholder: {
+    backgroundColor: '#581845',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPeopleInfo: {
+    flex: 1,
+  },
+  addPeopleName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a2e',
+  },
+  addPeopleRole: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  addPeopleCallBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // ═══ Audio Output Picker Modal (Android) ═══
+  audioPickerSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 34,
+  },
+  audioPickerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a2e',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  audioPickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  audioPickerRowSelected: {
+    backgroundColor: 'rgba(88, 24, 69, 0.05)',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+  },
+  audioPickerRowText: {
+    fontSize: 16,
+    color: '#333',
   },
 });
 

@@ -6,6 +6,7 @@ import { socket } from '../socket';
 import { Audio } from 'expo-av';
 import Toast from 'react-native-toast-message';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { checkProfileCompletion } from '../utils/checkProfileCompletion';
 import { useUnread } from '../context/UnreadContext';
 import { Platform } from 'react-native';
@@ -18,6 +19,11 @@ import {
   isBiometricEnabled,
 } from '../services/biometric.service';
 
+// Bump this whenever a stored user schema changes between releases.
+// On first launch after an update the old cached user is cleared so fresh data
+// is fetched from the API — prevents stale-schema freezes after updates.
+const APP_CACHE_VERSION = Constants.expoConfig?.version || '2.0.0';
+
 
 const AuthContext = createContext();
 
@@ -26,6 +32,33 @@ const AuthProvider = ({ children }) => {
   const [userId, setUserId] = useState('');
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
+  const AUTH_REQUEST_TIMEOUT_MS = 15000;
+
+  const normalizeUserPayload = (candidate) => {
+    if (!candidate || typeof candidate !== 'object') return null;
+    const source = candidate.user ?? candidate;
+    if (!source || typeof source !== 'object') return null;
+
+    const {
+      token: _token,
+      jwtToken: _jwtToken,
+      refreshToken: _refreshToken,
+      ...normalized
+    } = source;
+
+    return normalized?.id || normalized?._id || normalized?.email ? normalized : null;
+  };
+
+  const safeParseStoredUser = (rawUser) => {
+    if (!rawUser) return null;
+    try {
+      const parsedUser = JSON.parse(rawUser);
+      return parsedUser && typeof parsedUser === 'object' ? parsedUser : null;
+    } catch (error) {
+      console.warn('[AuthContext] Failed to parse stored user:', error?.message || error);
+      return null;
+    }
+  };
 
   const getTokenExpiryMs = (jwt) => {
     if (!jwt) return null;
@@ -48,38 +81,59 @@ const AuthProvider = ({ children }) => {
   };
   const [isLoading, setIsLoading] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  // null = not yet read from storage (loading), false = not seen, true = seen
+  const [onboardingDone, setOnboardingDone] = useState(false);
 
   // ✅ Properly use UnreadContext
   const unreadCtx = useUnread();                 // may be null if not wrapped
   const unreadState = unreadCtx?.state ?? null;  // null-safe
   const unreadDispatch = unreadCtx?.dispatch;    // null-safe
 
-  const login = async (token, userId, email) => {
+  const login = async (nextToken, nextUserId, email, initialUser = null) => {
     try {
-      await AsyncStorage.setItem('token', token);
-      await AsyncStorage.setItem('userId', userId);
-      setToken(token);
-      setUserId(userId);
-
-      const res = await axios.get(`${API_BASE_URL}/accounts/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.data?.user) {
-        setUser(res.data.user);
-        await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
-        socket.emit('register', userId);
-
-        // Update biometric credentials if biometric login is enabled
-        const bioEnabled = await isBiometricEnabled();
-        if (bioEnabled && email) {
-          await saveBiometricCredentials(email, token, userId);
-        }
-      } else {
-        console.warn("⚠️ Login response didn't include user data");
+      const resolvedUserId = String(nextUserId || initialUser?.id || initialUser?._id || '');
+      if (!nextToken || !resolvedUserId) {
+        throw new Error('Missing authentication token or user id');
       }
+
+      await AsyncStorage.multiSet([
+        ['token', nextToken],
+        ['userId', resolvedUserId],
+      ]);
+      setToken(nextToken);
+      setUserId(resolvedUserId);
+
+      let resolvedUser = normalizeUserPayload(initialUser);
+
+      if (!resolvedUser) {
+        const res = await axios.get(`${API_BASE_URL}/accounts/${resolvedUserId}`, {
+          headers: { Authorization: `Bearer ${nextToken}` },
+          timeout: AUTH_REQUEST_TIMEOUT_MS,
+        });
+        resolvedUser = normalizeUserPayload(res.data);
+      }
+
+      if (!resolvedUser) {
+        throw new Error('Authenticated user payload was missing');
+      }
+
+      setUser(resolvedUser);
+      await AsyncStorage.setItem('user', JSON.stringify(resolvedUser));
+      socket.emit('register', resolvedUserId);
+
+      const bioEnabled = await isBiometricEnabled();
+      if (bioEnabled && email) {
+        await saveBiometricCredentials(email, nextToken, resolvedUserId);
+      }
+
+      return resolvedUser;
     } catch (err) {
       console.error("❌ Login or user fetch failed:", err?.response?.data || err.message);
+      await AsyncStorage.multiRemove(['token', 'userId', 'user']);
+      setToken('');
+      setUserId('');
+      setUser(null);
+      throw err;
     }
   };
 
@@ -109,10 +163,55 @@ const AuthProvider = ({ children }) => {
     try {
       setIsLoading(true);
       setAuthError(null);
-      const storedToken = await AsyncStorage.getItem('token');
-      const storedUserId = await AsyncStorage.getItem('userId');
-      const storedUser = await AsyncStorage.getItem('user');
-      console.log('[AuthContext] Got from storage:', { storedToken, storedUserId, storedUser });
+
+      // ── User schema cache: clear stale user object on app version change ─
+      // Only clears the `user` object — does NOT touch the onboarding flag.
+      try {
+        const storedCacheVersion = await AsyncStorage.getItem('appCacheVersion');
+        if (storedCacheVersion !== APP_CACHE_VERSION) {
+          console.log(`[AuthContext] App updated ${storedCacheVersion} → ${APP_CACHE_VERSION}. Clearing stale user cache.`);
+          await AsyncStorage.removeItem('user');
+          await AsyncStorage.setItem('appCacheVersion', APP_CACHE_VERSION);
+        }
+      } catch (verErr) {
+        console.warn('[AuthContext] User cache version check failed (non-fatal):', verErr?.message);
+      }
+
+      // ── Onboarding reset: separate key so it can be controlled independently ─
+      // 'onboardingCacheV' was never stored on any device before this code ran,
+      // so the first time this executes it will always clear @onboarding_slides_complete,
+      // guaranteeing every existing user sees the Onboarding screen once after update.
+      // To force another reset in a future release, bump ONBOARDING_CACHE_VERSION.
+      const ONBOARDING_CACHE_VERSION = '1';
+      try {
+        const storedOnboardingV = await AsyncStorage.getItem('onboardingCacheV');
+        if (storedOnboardingV !== ONBOARDING_CACHE_VERSION) {
+          console.log('[AuthContext] Onboarding cache version mismatch — resetting onboarding flag.');
+          await AsyncStorage.removeItem('@onboarding_slides_complete');
+          await AsyncStorage.setItem('onboardingCacheV', ONBOARDING_CACHE_VERSION);
+        }
+      } catch (obErr) {
+        console.warn('[AuthContext] Onboarding cache version check failed (non-fatal):', obErr?.message);
+      }
+      // ─────────────────────────────────────────────────────────────────────
+      // Read onboarding flag in the same batch as the auth token check.
+      const [storedToken, storedUserId, rawStoredUser, onboardingFlag] =
+        await Promise.all([
+          AsyncStorage.getItem('token'),
+          AsyncStorage.getItem('userId'),
+          AsyncStorage.getItem('user'),
+          AsyncStorage.getItem('@onboarding_slides_complete'),
+        ]);
+      setOnboardingDone(onboardingFlag === 'true');
+      const parsedStoredUser = safeParseStoredUser(rawStoredUser);
+      if (rawStoredUser && !parsedStoredUser) {
+        await AsyncStorage.removeItem('user');
+      }
+      console.log('[AuthContext] Got from storage:', {
+        hasToken: Boolean(storedToken),
+        storedUserId,
+        hasStoredUser: Boolean(parsedStoredUser),
+      });
 
       if (storedToken && isTokenExpired(storedToken)) {
         await AsyncStorage.multiRemove(['token', 'userId', 'user']);
@@ -130,19 +229,20 @@ const AuthProvider = ({ children }) => {
         console.log('⚠️ Token is expiring soon. Keep session active using backend refresh or longer TTL.');
       }
 
-      if (storedUser) {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        console.log('[AuthContext] Loaded user from storage:', parsedUser);
+      if (parsedStoredUser) {
+        setUser(parsedStoredUser);
+        console.log('[AuthContext] Loaded user from storage:', parsedStoredUser);
       } else if (storedToken && storedUserId) {
         try {
           const res = await axios.get(`${API_BASE_URL}/accounts/${storedUserId}`, {
             headers: { Authorization: `Bearer ${storedToken}` },
+            timeout: AUTH_REQUEST_TIMEOUT_MS,
           });
-          if (res.data?.user) {
-            setUser(res.data.user);
-            await AsyncStorage.setItem('user', JSON.stringify(res.data.user));
-            console.log('[AuthContext] Loaded user from API:', res.data.user);
+          const resolvedUser = normalizeUserPayload(res.data);
+          if (resolvedUser) {
+            setUser(resolvedUser);
+            await AsyncStorage.setItem('user', JSON.stringify(resolvedUser));
+            console.log('[AuthContext] Loaded user from API:', resolvedUser);
           }
         } catch (err) {
           setAuthError('Failed to fetch user from API: ' + (err?.message || 'Unknown error'));
@@ -238,30 +338,8 @@ const AuthProvider = ({ children }) => {
    } catch {}
  };
 
-    // --- Push registration (kept as-is)
-    const doPushSetup = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-          });
-        }
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
-        let finalStatus = existingStatus;
-        if (existingStatus !== 'granted') {
-          const { status } = await Notifications.requestPermissionsAsync();
-          finalStatus = status;
-        }
-        if (finalStatus === 'granted') {
-          const token = (await Notifications.getExpoPushTokenAsync()).data;
-          console.log('✅ Expo Push Token:', token);
-        }
-      } catch (e) {
-        console.warn('Push setup failed', e);
-      }
-    };
-    doPushSetup();
+    // Push token registration is handled centrally in App.js (WithSocketListener).
+    // Removed duplicate doPushSetup() here to prevent racing with the App.js handler.
 
     // --- Legacy direct DM toast/sound (kept)
     const handleNewMessage = async ({ message, sender }) => {
@@ -329,6 +407,13 @@ const AuthProvider = ({ children }) => {
         },
         checkProfileCompletion,
         authError,
+        onboardingDone,
+        markOnboardingDone: async () => {
+          try {
+            await AsyncStorage.setItem('@onboarding_slides_complete', 'true');
+          } catch {}
+          setOnboardingDone(true);
+        },
       }}
     >
       {children}

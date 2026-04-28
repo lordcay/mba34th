@@ -2,7 +2,7 @@
   "expo": {
     "name": "34thstreet",
     "slug": "34thstreet",
-    "version": "1.1.10",
+    "version": "2.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo1.png",
     "userInterfaceStyle": "light",
@@ -21,8 +21,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.coredevhub.34thstreet",
-      "buildNumber": "60",
-      "appleTeamId": "HMUJY5KA29",
+      "buildNumber": "72",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSContactsUsageDescription": "We need access to your contacts to help you find and connect with friends on 34th Street.",
@@ -30,6 +29,7 @@
         "NSPhotoLibraryAddUsageDescription": "We may save edited photos to your library.",
         "NSCameraUsageDescription": "We need camera access for video calls and profile pictures.",
         "NSMicrophoneUsageDescription": "We need microphone access for voice and video calls.",
+        "NSLocationWhenInUseUsageDescription": "34th Street uses your location to show your city, calculate nearby members and events, and let you refresh your location when you choose.",
         "NSFaceIDUsageDescription": "Use Face ID to sign in to your 34th Street account quickly and securely.",
         "NSCalendarsUsageDescription": "34th Street may access your calendar to help you schedule and manage events.",
         "NSCalendarsFullAccessUsageDescription": "34th Street needs full calendar access to help you schedule and manage events.",
@@ -37,10 +37,9 @@
           "linkedin"
         ],
         "UIBackgroundModes": [
-          "fetch",
+          "audio",
           "remote-notification",
-          "voip",
-          "audio"
+          "background-fetch"
         ]
       }
     },
@@ -86,7 +85,7 @@
             "./assets/sounds/incoming.wav"
           ],
           "defaultChannel": "messages",
-          "enableBackgroundRemoteNotifications": true
+          "mode": "production"
         }
       ],
       [

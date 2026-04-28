@@ -15,25 +15,56 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import api from '../services/api';
 import logo2 from '../assets/logo1.png';
+import { getRegistrationProgress } from '../registrationUtils';
 
 const ACCENT = '#581845';
 const ACCENT_LIGHT = '#f5edf8';
 const GOLD = '#ffb60a';
+
+const DEGREE_OPTIONS = [
+  'Bachelor of Arts (BA)',
+  'Bachelor of Science (BSc)',
+  'Bachelor of Engineering (BEng)',
+  'Bachelor of Commerce (BCom)',
+  'Bachelor of Laws (LLB)',
+  'Bachelor of Education (BEd)',
+  'Bachelor of Medicine (MBBS)',
+  'Master of Business Administration (MBA)',
+  'Master of Science (MSc)',
+  'Master of Arts (MA)',
+  'Master of Engineering (MEng)',
+  'Master of Laws (LLM)',
+  'Master of Finance (MFin)',
+  'Master of Public Health (MPH)',
+  'Master of Public Policy (MPP)',
+  'Master of Information Systems (MIS)',
+  'Doctor of Philosophy (PhD)',
+  'Doctor of Medicine (MD)',
+  'Doctor of Business Administration (DBA)',
+  'Postgraduate Diploma (PGDip)',
+  'Higher National Diploma (HND)',
+  'Associate Degree',
+  'Other',
+];
 
 const AlumniScreen = () => {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
 
-  // Form state
+  // Name from NameScreen (read-only, sourced from registration progress)
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [nameLoaded, setNameLoaded] = useState(false);
+
+  // Form state
   const [gender, setGender] = useState('');
   const [phone, setPhone] = useState('');
   const [personalEmail, setPersonalEmail] = useState('');
@@ -54,6 +85,8 @@ const AlumniScreen = () => {
   // UI state
   const [submitting, setSubmitting] = useState(false);
   const [genderModalVisible, setGenderModalVisible] = useState(false);
+  const [degreeModalVisible, setDegreeModalVisible] = useState(false);
+  const [degreeSearch, setDegreeSearch] = useState('');
   const [otpModalVisible, setOtpModalVisible] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -80,6 +113,15 @@ const AlumniScreen = () => {
     });
   }, [navigation]);
 
+  // Load firstName/lastName from NameScreen registration progress
+  useEffect(() => {
+    getRegistrationProgress('Name').then((data) => {
+      if (data?.firstName) setFirstName(data.firstName);
+      if (data?.lastName) setLastName(data.lastName);
+      setNameLoaded(true);
+    }).catch(() => setNameLoaded(true));
+  }, []);
+
   // OTP countdown timer
   useEffect(() => {
     if (otpTimer <= 0) return;
@@ -95,12 +137,6 @@ const AlumniScreen = () => {
     delete newErrors[field];
 
     switch (field) {
-      case 'firstName':
-        if (!value.trim()) newErrors.firstName = 'First name is required';
-        break;
-      case 'lastName':
-        if (!value.trim()) newErrors.lastName = 'Last name is required';
-        break;
       case 'gender':
         if (!value) newErrors.gender = 'Gender is required';
         break;
@@ -113,8 +149,7 @@ const AlumniScreen = () => {
           newErrors.personalEmail = 'Enter a valid email address';
         break;
       case 'workEmail':
-        if (!value.trim()) newErrors.workEmail = 'Alumni/Work email is required';
-        else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
+        if (value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value))
           newErrors.workEmail = 'Enter a valid email address';
         break;
       case 'schoolGraduatedFrom':
@@ -146,14 +181,11 @@ const AlumniScreen = () => {
     let valid = true;
     const newErrors = {};
 
-    if (!firstName.trim()) { newErrors.firstName = 'First name is required'; valid = false; }
-    if (!lastName.trim()) { newErrors.lastName = 'Last name is required'; valid = false; }
     if (!gender) { newErrors.gender = 'Gender is required'; valid = false; }
     if (!phone.trim()) { newErrors.phone = 'Phone number is required'; valid = false; }
     if (!personalEmail.trim()) { newErrors.personalEmail = 'Personal email is required'; valid = false; }
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) { newErrors.personalEmail = 'Enter a valid email'; valid = false; }
-    if (!workEmail.trim()) { newErrors.workEmail = 'Alumni/Work email is required'; valid = false; }
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workEmail)) { newErrors.workEmail = 'Enter a valid email'; valid = false; }
+    if (workEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(workEmail)) { newErrors.workEmail = 'Enter a valid email'; valid = false; }
     if (!schoolGraduatedFrom.trim()) { newErrors.schoolGraduatedFrom = 'School is required'; valid = false; }
     if (!degreeHeld.trim()) { newErrors.degreeHeld = 'Degree is required'; valid = false; }
     if (!linkedIn.trim()) { newErrors.linkedIn = 'LinkedIn URL is required'; valid = false; }
@@ -290,13 +322,16 @@ const AlumniScreen = () => {
   }
 
   const renderInput = (label, value, onChangeText, placeholder, options = {}) => {
-    const { field, keyboardType, autoCapitalize, secureTextEntry, toggleSecure, multiline } = options;
+    const { field, keyboardType, autoCapitalize, secureTextEntry, toggleSecure, multiline, optional } = options;
     const hasError = field && errors[field];
 
     return (
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>
-          {label} <Text style={styles.requiredStar}>*</Text>
+          {label}{' '}
+          {optional
+            ? <Text style={styles.optionalTag}>(Optional)</Text>
+            : <Text style={styles.requiredStar}>*</Text>}
         </Text>
         <View style={[styles.inputWrapper, hasError && styles.inputWrapperError]}>
           <TextInput
@@ -372,8 +407,20 @@ const AlumniScreen = () => {
                 <Text style={styles.sectionTitle}>Personal Information</Text>
               </View>
 
-              {renderInput('First Name', firstName, setFirstName, 'Enter your first name', { field: 'firstName' })}
-              {renderInput('Last Name', lastName, setLastName, 'Enter your last name', { field: 'lastName' })}
+              {/* Name pulled from NameScreen — shown as confirmation tag */}
+              <View style={styles.nameTag}>
+                <Ionicons name="person-circle-outline" size={20} color={ACCENT} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.nameTagLabel}>Your Name (from previous step)</Text>
+                  <Text style={styles.nameTagValue}>
+                    {nameLoaded
+                      ? (firstName || lastName
+                          ? `${firstName} ${lastName}`.trim()
+                          : 'Not found — please go back and enter your name')
+                      : 'Loading...'}
+                  </Text>
+                </View>
+              </View>
 
               {/* Gender Selector */}
               <View style={styles.inputGroup}>
@@ -414,6 +461,7 @@ const AlumniScreen = () => {
                 field: 'workEmail',
                 keyboardType: 'email-address',
                 autoCapitalize: 'none',
+                optional: true,
               })}
 
               {/* Academic Section */}
@@ -425,9 +473,24 @@ const AlumniScreen = () => {
               {renderInput('School Graduated From', schoolGraduatedFrom, setSchoolGraduatedFrom, 'e.g., Harvard Business School', {
                 field: 'schoolGraduatedFrom',
               })}
-              {renderInput('Degree Held', degreeHeld, setDegreeHeld, 'e.g., MBA, MSc Finance, PhD', {
-                field: 'degreeHeld',
-              })}
+
+              {/* Degree Held — modern dropdown */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Degree Held <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <TouchableOpacity
+                  style={[styles.inputWrapper, styles.selectorWrapper, errors.degreeHeld && styles.inputWrapperError]}
+                  onPress={() => { setDegreeSearch(''); setDegreeModalVisible(true); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.selectorText, !degreeHeld && styles.selectorPlaceholder]}>
+                    {degreeHeld || 'Select degree'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#888" />
+                </TouchableOpacity>
+                {errors.degreeHeld && <Text style={styles.fieldError}>{errors.degreeHeld}</Text>}
+              </View>
               {renderInput('LinkedIn Profile URL', linkedIn, setLinkedIn, 'https://linkedin.com/in/your-profile', {
                 field: 'linkedIn',
                 keyboardType: 'url',
@@ -583,6 +646,60 @@ const AlumniScreen = () => {
               ))}
             </View>
           </Modal>
+
+          {/* Degree Held Modal */}
+          <Modal visible={degreeModalVisible} animationType="slide" transparent onRequestClose={() => setDegreeModalVisible(false)}>
+            <TouchableWithoutFeedback onPress={() => setDegreeModalVisible(false)}>
+              <View style={styles.modalOverlay} />
+            </TouchableWithoutFeedback>
+            <View style={[styles.degreeSheet, { paddingBottom: insets.bottom + 16 }]}>
+              <View style={styles.modalTopRow}>
+                <Text style={styles.modalTitle}>Select Degree</Text>
+                <TouchableOpacity onPress={() => setDegreeModalVisible(false)}>
+                  <Text style={styles.modalCancel}>Done</Text>
+                </TouchableOpacity>
+              </View>
+              {/* Search */}
+              <View style={styles.degreeSearchWrap}>
+                <Ionicons name="search-outline" size={16} color="#999" style={{ marginRight: 8 }} />
+                <TextInput
+                  value={degreeSearch}
+                  onChangeText={setDegreeSearch}
+                  placeholder="Search degree..."
+                  placeholderTextColor="#bbb"
+                  style={styles.degreeSearchInput}
+                  autoCapitalize="none"
+                />
+                {degreeSearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setDegreeSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color="#ccc" />
+                  </TouchableOpacity>
+                )}
+              </View>
+              <FlatList
+                data={DEGREE_OPTIONS.filter(d => d.toLowerCase().includes(degreeSearch.toLowerCase()))}
+                keyExtractor={(item) => item}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.degreeOption, degreeHeld === item && styles.degreeOptionSelected]}
+                    onPress={() => {
+                      setDegreeHeld(item);
+                      setErrors((prev) => { const e = { ...prev }; delete e.degreeHeld; return e; });
+                      setDegreeModalVisible(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.degreeOptionText, degreeHeld === item && styles.degreeOptionTextSelected]}>
+                      {item}
+                    </Text>
+                    {degreeHeld === item && <Ionicons name="checkmark-circle" size={20} color={ACCENT} />}
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: '#f5f5f5' }} />}
+              />
+            </View>
+          </Modal>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </TouchableWithoutFeedback>
@@ -655,6 +772,7 @@ const styles = StyleSheet.create({
   inputGroup: { marginBottom: 14 },
   inputLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginBottom: 6 },
   requiredStar: { color: '#e11d48', fontSize: 13 },
+  optionalTag: { fontSize: 12, fontWeight: '400', color: '#999' },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -824,4 +942,58 @@ const styles = StyleSheet.create({
   genderOptionSelected: { backgroundColor: ACCENT_LIGHT, borderColor: ACCENT },
   genderOptionText: { fontSize: 16, fontWeight: '600', color: '#333' },
   genderOptionTextSelected: { color: ACCENT },
+
+  // Name tag (shows name read from NameScreen)
+  nameTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: ACCENT_LIGHT,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e5d5ec',
+  },
+  nameTagLabel: { fontSize: 11, color: '#888', marginBottom: 2 },
+  nameTagValue: { fontSize: 15, fontWeight: '700', color: ACCENT },
+
+  // Degree dropdown sheet
+  degreeSheet: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    maxHeight: '75%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  degreeSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: 12,
+  },
+  degreeSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333',
+  },
+  degreeOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 4,
+  },
+  degreeOptionSelected: { backgroundColor: ACCENT_LIGHT, borderRadius: 8, paddingHorizontal: 10 },
+  degreeOptionText: { fontSize: 15, color: '#333', flex: 1 },
+  degreeOptionTextSelected: { color: ACCENT, fontWeight: '700' },
 });
