@@ -1,4 +1,4 @@
- 34th Street 🌍 
+ <!-- 34th Street 🌍 
 A place where verified African graduate students connect, collaborate, and build community across the globe.
 
 ** Overview
@@ -85,4 +85,62 @@ Event-based meetups
 Push notifications
 
 🤝 Contributing
-Contributions are welcome! If you’d like to suggest a feature or fix a bug, feel free to fork the repo and create a pull request.
+Contributions are welcome! If you’d like to suggest a feature or fix a bug, feel free to fork the repo and create a pull request. -->
+
+
+
+
+# 34th Street
+
+A platform where verified African graduate students connect, collaborate, and build community across the globe.
+
+## Overview
+
+34th Street is a mobile social application built with React Native and Node.js. It is designed for verified African graduate students at top institutions worldwide.
+
+The app allows users to create detailed profiles, view verified community members, chat privately, upload profile photos, and connect with others in a safe, identity-verified digital space.
+
+## Features
+
+- Authentication and JWT token-based authorization
+- Verified member directory
+- Private messaging with read receipts and typing indicators
+- Photo uploads and profile gallery
+- Rich profile setup including education, interests, origin, location, and fun facts
+- Responsive and modern mobile user interface
+- Node.js and Express backend
+- MongoDB database integration
+- Cloudinary image hosting
+- Real-time communication using Socket.IO
+
+## Tech Stack
+
+### Frontend
+
+- React Native with Expo
+- React Navigation
+- Axios
+- Lottie Animations
+- Socket.IO Client
+
+### Backend
+
+- Node.js
+- Express.js
+- MongoDB
+- Mongoose
+- JWT Authentication
+- Cloudinary
+- Socket.IO
+
+## Screenshots
+
+Add screenshots or a short screen recording of the app here to showcase the user interface and user experience.
+
+## Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/34thstreet.git
+cd 34thstreet
